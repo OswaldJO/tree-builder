@@ -24,16 +24,18 @@ void main() {
   });
 
   test('includes files with uncommon extensions', () async {
-    final build = await scanner.scanDirectory(tempDir.path);
-    expect(build.treeText, contains('game.iso'));
+    final build = await scanner.pickAndScan(path: tempDir.path);
+    expect(build, isNotNull);
+    expect(build!.treeText, contains('game.iso'));
     expect(build.treeText, contains('disc.chd'));
     expect(build.treeText, contains('inner.iso'));
     expect(build.fileCount, 3);
   });
 
   test('respects max depth', () async {
-    final build = await scanner.scanDirectory(tempDir.path, maxDepth: 1);
-    expect(build.treeText, contains('nested/'));
+    final build = await scanner.pickAndScan(path: tempDir.path, maxDepth: 1);
+    expect(build, isNotNull);
+    expect(build!.treeText, contains('nested/'));
     expect(build.treeText, isNot(contains('inner.iso')));
     expect(build.fileCount, 2);
   });
