@@ -1,56 +1,67 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 
 import '../models/tree_build.dart';
+import '../utils/map_cast.dart';
 
 class TreeExportService {
   Future<String?> exportAsJson(TreeBuild build) async {
-    final path = await FilePicker.platform.saveFile(
+    final contents = const JsonEncoder.withIndent('  ').convert(build.toJson());
+    return _saveString(
       dialogTitle: 'Export Tree as JSON',
       fileName: '${build.rootName}_tree.json',
-      type: FileType.custom,
-      allowedExtensions: ['json'],
+      extension: 'json',
+      contents: contents,
     );
-    if (path == null) return null;
-
-    final file = File(path);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(build.toJson()),
-    );
-    return path;
   }
 
   Future<String?> exportAsText(TreeBuild build) async {
-    final path = await FilePicker.platform.saveFile(
+    return _saveString(
       dialogTitle: 'Export Tree as Text',
       fileName: '${build.rootName}_tree.txt',
-      type: FileType.custom,
-      allowedExtensions: ['txt'],
+      extension: 'txt',
+      contents: build.treeText,
     );
-    if (path == null) return null;
-
-    final file = File(path);
-    await file.writeAsString(build.treeText);
-    return path;
   }
 
   Future<String?> exportLibraryAsJson(List<TreeBuild> builds) async {
-    final path = await FilePicker.platform.saveFile(
+    final contents = const JsonEncoder.withIndent('  ').convert(
+      builds.map((b) => b.toJson()).toList(),
+    );
+    return _saveString(
       dialogTitle: 'Export Library as JSON',
       fileName: 'tree_library.json',
-      type: FileType.custom,
-      allowedExtensions: ['json'],
+      extension: 'json',
+      contents: contents,
     );
-    if (path == null) return null;
+  }
 
-    final file = File(path);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(
-        builds.map((b) => b.toJson()).toList(),
-      ),
+  Future<String?> _saveString({
+    required String dialogTitle,
+    required String fileName,
+    required String extension,
+    required String contents,
+  }) async {
+    final bytes = Uint8List.fromList(utf8.encode(contents));
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: dialogTitle,
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: [extension],
+      bytes: isMobile ? bytes : null,
     );
+
+    if (path == null) return isMobile ? fileName : null;
+
+    if (!isMobile) {
+      await File(path).writeAsBytes(bytes);
+    }
+
     return path;
   }
 
@@ -59,26 +70,48 @@ class TreeExportService {
       type: FileType.custom,
       allowedExtensions: ['json'],
       dialogTitle: 'Import Tree(s)',
+      withData: true,
     );
-    if (result == null || result.files.single.path == null) {
+    if (result == null || result.files.isEmpty) {
       return [];
     }
 
-    final file = File(result.files.single.path!);
-    final contents = await file.readAsString();
+    final file = result.files.single;
+    final contents = await _readFileContents(file);
     final decoded = jsonDecode(contents);
 
     if (decoded is List<dynamic>) {
       return decoded
-          .map((item) => TreeBuild.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => TreeBuild.fromJson(
+              deepCastMap(Map<dynamic, dynamic>.from(item as Map)),
+            ),
+          )
           .toList();
     }
 
-    if (decoded is Map<String, dynamic>) {
-      return [TreeBuild.fromJson(decoded)];
+    if (decoded is Map) {
+      return [
+        TreeBuild.fromJson(
+          deepCastMap(Map<dynamic, dynamic>.from(decoded)),
+        ),
+      ];
     }
 
     throw TreeExportException('Invalid import file format.');
+  }
+
+  Future<String> _readFileContents(PlatformFile file) async {
+    if (file.bytes != null) {
+      return utf8.decode(file.bytes!);
+    }
+
+    final path = file.path;
+    if (path == null) {
+      throw TreeExportException('Unable to read selected file.');
+    }
+
+    return File(path).readAsString();
   }
 }
 

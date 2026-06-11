@@ -9,15 +9,15 @@ For a short, commit-adjacent summary of recent changes, see `source control log.
 
 - **Stack:** Flutter (Material 3), Dart 3.8+.
 - **Persistence:** Single JSON file `tree_library.json` in app documents directory (`TreeStorageService`).
-- **Navigation:** Single home screen + pushed routes for **Library** and **Tree detail**.
-- **Platforms:** Android (SAF-native scan), macOS/desktop/iOS ( `file_picker` + `dart:io` scan).
+- **Navigation:** Home screen + pushed routes for **Library** and **Tree detail**.
+- **Platforms:** Android (SAF-native scan), macOS/desktop/iOS (`file_picker` + `dart:io` scan).
 
 | Concern | Package / mechanism |
 |---------|---------------------|
 | Directory pick (desktop) | `file_picker` `getDirectoryPath()` |
 | Directory pick + scan (Android) | Custom `MethodChannel` + `EventChannel` in `MainActivity.kt` |
 | Local library | `path_provider` + JSON file |
-| Export / import | `file_picker` save/open dialogs |
+| Export / import | `file_picker` save/open dialogs (platform-specific bytes vs path) |
 
 ---
 
@@ -28,23 +28,31 @@ For a short, commit-adjacent summary of recent changes, see `source control log.
 ### Choose Directory
 
 1. User taps **Choose Directory**.
-2. **Android:** Native folder picker (`ACTION_OPEN_DOCUMENT_TREE`) via `pickDirectory`; then background scan via `scanDirectory`.
-3. **Other platforms:** `FilePicker.platform.getDirectoryPath()`, then `dart:io` recursive scan.
+2. **Android:** `DirectoryScanner.pickAndScan()` → `AndroidTreeScanner.pickDirectory()` (native `ACTION_OPEN_DOCUMENT_TREE`) → `scanDirectory` on background thread.
+3. **Other platforms:** `FilePicker.platform.getDirectoryPath()` → `DirectoryScanner._scanWithIo()`.
 4. Result is saved to library automatically and shown in a scrollable preview; **Open** navigates to full tree view.
 
 ### Limit folder depth
 
 - Checkbox **Limit folder depth** (off = unlimited).
-- When checked, integer field **Depth levels** (minimum 1).
-- `maxDepth` = how many folder levels below root are expanded. At the limit, subfolders appear as leaves (`name/`) without their children; files at each listed level are still included.
+- When checked, integer field **Depth levels** (minimum 1, digits only).
+- `maxDepth` = how many folder levels below root are expanded.
+- At the limit, subfolders appear as leaves (`name/`) without their children; files at each listed level are still included.
+- Files inside folders beyond the depth cutoff are not listed (see BJ-006).
 
 ### Scanning UX
 
-While scanning, `ScanLoadingOverlay` covers the screen:
+While scanning, `ScanLoadingOverlay` (`Stack` over home body) shows:
 
-- Phases: **Scanning directory** → **Building tree** → **Saving to library**
-- Live folder/file counts (Android via `EventChannel`; desktop via periodic reports every 25 entries)
-- Current item name when available
+| Phase | When |
+|-------|------|
+| Scanning directory | Native/`dart:io` walk in progress |
+| Building tree | `compute()` parse + `renderTree` |
+| Saving to library | `TreeStorageService.save` |
+
+- Live folder/file counts (Android: `EventChannel` every 25 entries; desktop: same interval in `_ScanCounters`).
+- Current item name when available.
+- Overlay starts **after** folder selection on Android (not during system picker).
 
 **Key types:** `lib/widgets/scan_loading_overlay.dart`, `lib/models/scan_progress.dart`
 
@@ -65,13 +73,15 @@ While scanning, `ScanLoadingOverlay` covers the screen:
 
 **File:** `lib/screens/tree_view_screen.dart`
 
-- Info card: path, folder count, file count.
+- Info card: `rootPath` (filesystem path or Android `content://` URI), folder count, file count.
 - Monospace selectable ASCII tree (`TreeTextView`).
-- Copy to clipboard; export as JSON or plain text.
+- App bar actions: copy to clipboard; export menu (JSON / text); delete (with confirmation).
 
 ---
 
 ## Directory scanning
+
+**Entry point:** `DirectoryScanner.pickAndScan({maxDepth, path, onProgress})`
 
 ### Desktop / macOS / iOS (`dart:io`)
 
@@ -80,28 +90,29 @@ While scanning, `ScanLoadingOverlay` covers the screen:
 - Lists with `directory.list(followLinks: false)`.
 - **Directory:** `entity is Directory` or `FileSystemEntity.type` == directory.
 - **File:** everything else (no extension filter).
-- Sort: directories first, then alphabetical.
+- Sort: directories first, then alphabetical (case-insensitive).
 - ASCII render: `├──`, `└──`, `│` prefixes; folders suffixed with `/`.
+- Progress: `_ScanCounters.maybeReport` every 25 entries + `Future.delayed(Duration.zero)` to yield to UI.
 
 ### Android (Storage Access Framework)
 
 **Files:** `android/.../MainActivity.kt`, `lib/services/android_tree_scanner.dart`
 
-| Channel | Name | Purpose |
-|---------|------|---------|
-| MethodChannel | `com.treebuilder/tree_scanner` | `pickDirectory`, `scanDirectory` |
-| EventChannel | `com.treebuilder/scan_progress` | `{folders, files, current}` during scan |
+| Channel | Name | Methods / events |
+|---------|------|------------------|
+| MethodChannel | `com.treebuilder/tree_scanner` | `pickDirectory` → URI string; `scanDirectory` → tree map |
+| EventChannel | `com.treebuilder/scan_progress` | `{folders, files, current}` |
 
 Flow:
 
-1. `pickDirectory` → persistable URI string (not a plain filesystem path).
-2. `scanDirectory` on `Executors` background thread → recursive `DocumentFile.listFiles()`.
-3. Progress emitted every 25 entries on main thread.
-4. Dart receives map → `compute()` → `deepCastMap` → `TreeNode.fromJson` → `renderTree`.
+1. `pickDirectory` → `ACTION_OPEN_DOCUMENT_TREE` → `takePersistableUriPermission` → return URI string.
+2. `scanDirectory` on `Executors.newSingleThreadExecutor()` → recursive `DocumentFile.listFiles()`.
+3. Progress emitted every 25 entries via `EventChannel` on main `Handler`.
+4. Dart: subscribe to progress stream → `invokeMethod('scanDirectory')` → `compute(_parseScanResult)` → `deepCastMap` → `TreeNode.fromJson` → `renderTree`.
 
-**Why SAF:** Android scoped storage blocks reliable `dart:io` file listing in user-picked trees; folders could list while `.iso` / `.chd` files were skipped.
+**Why SAF:** Android scoped storage prevents reliable `dart:io` file listing in user-picked trees; folders could appear while game files (`.iso`, `.chd`, `.cci`, `.3ds`, etc.) were skipped.
 
-**Key types:** `androidx.documentfile:documentfile`, `lib/utils/map_cast.dart`
+**Key types:** `androidx.documentfile:documentfile:1.1.0`, `lib/utils/map_cast.dart`
 
 ---
 
@@ -109,13 +120,20 @@ Flow:
 
 **File:** `lib/services/tree_export_service.dart`
 
-| Format | Contents |
-|--------|----------|
-| JSON (single) | Full `TreeBuild` including `root` tree node |
-| JSON (library) | Array of `TreeBuild` |
-| Text | `treeText` only |
+| Format | Contents | Where |
+|--------|----------|-------|
+| JSON (single) | Full `TreeBuild` including `root` | Tree detail menu |
+| JSON (library) | Array of `TreeBuild` | Library toolbar |
+| Text | `treeText` only | Tree detail menu |
 
-Import accepts single object or array; merges by `id` (skips duplicates).
+### Platform behavior
+
+| Platform | Export | Import |
+|----------|--------|--------|
+| Android / iOS | `saveFile(bytes: utf8)` — bytes **required** | `pickFiles(withData: true)` → read `file.bytes` |
+| Desktop | `saveFile` → path → `File.writeAsBytes` | `pickFiles` → `File(path).readAsString` |
+
+Import accepts single JSON object or array; `TreeStorageService.importBuilds` merges by `id` (skips duplicates). Uses `deepCastMap` before `TreeBuild.fromJson`.
 
 ---
 
@@ -129,19 +147,39 @@ Import accepts single object or array; merges by `id` (skips duplicates).
 | `isDirectory` | bool | |
 | `children` | List\<TreeNode\> | Empty for files |
 
-Computed: `fileCount`, `folderCount`.
+Computed: `fileCount`, `folderCount`. JSON via `toJson` / `fromJson`.
 
 ### `TreeBuild` — `lib/models/tree_build.dart`
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `id` | String | UUID v4 |
-| `rootPath` | String | Filesystem path or Android content URI |
-| `rootName` | String | Display name |
-| `root` | TreeNode | Full tree |
-| `treeText` | String | Pre-rendered ASCII |
+| `rootPath` | String | Filesystem path or Android `content://` URI |
+| `rootName` | String | Display name (folder name) |
+| `root` | TreeNode | Full tree structure |
+| `treeText` | String | Pre-rendered ASCII for display/export |
 | `createdAt` | DateTime | ISO 8601 in JSON |
-| `maxDepth` | int? | Optional; depth used for scan |
+| `maxDepth` | int? | Depth limit used for scan; omitted when unlimited |
+
+### `ScanProgress` — `lib/models/scan_progress.dart`
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `folders` | int | Folders encountered so far |
+| `files` | int | Files encountered so far |
+| `currentName` | String? | Last-read entry name |
+| `phase` | ScanPhase | `scanning`, `building`, `saving` |
+
+---
+
+## Storage
+
+**File:** `lib/services/tree_storage_service.dart`
+
+- Path: `{appDocuments}/tree_library.json`
+- `loadAll()` — sorted newest first
+- `save(build)` — upsert by `id`
+- `delete(id)`, `importBuilds(list)` — merge without duplicate ids
 
 ---
 
@@ -150,10 +188,10 @@ Computed: `fileCount`, `folderCount`.
 | Item | Location |
 |------|----------|
 | NDK version | `android/app/build.gradle.kts` → `27.0.12077973` |
-| DocumentFile dependency | `androidx.documentfile:documentfile:1.1.0` |
-| macOS file access | `com.apple.security.files.user-selected.read-write` in entitlements |
+| DocumentFile | `androidx.documentfile:documentfile:1.1.0` |
+| macOS file access | `com.apple.security.files.user-selected.read-write` in Debug/Release entitlements |
 
-No extra Android storage permissions in manifest — SAF grants per-folder access.
+No broad storage permissions in `AndroidManifest.xml` — SAF grants per-folder read access.
 
 ---
 
@@ -169,19 +207,22 @@ No extra Android storage permissions in manifest — SAF grants per-folder acces
 | Scan (Kotlin) | `android/app/src/main/kotlin/com/treebuilder/tree_builder/MainActivity.kt` |
 | Storage | `lib/services/tree_storage_service.dart` |
 | Export | `lib/services/tree_export_service.dart` |
+| Widgets | `lib/widgets/scan_loading_overlay.dart`, `lib/widgets/tree_text_view.dart` |
+| Utils | `lib/utils/map_cast.dart` |
 | Models | `lib/models/tree_node.dart`, `lib/models/tree_build.dart`, `lib/models/scan_progress.dart` |
-| Tests | `test/directory_scanner_test.dart`, `test/map_cast_test.dart` |
+| Tests | `test/directory_scanner_test.dart`, `test/map_cast_test.dart`, `test/widget_test.dart` |
 
 ---
 
 ## Known constraints / pitfalls
 
-- **Android `rootPath`** is a `content://` URI string — do not pass to `dart:io` `File` or `Directory`.
-- **Platform channel maps** arrive as `Map<Object?, Object?>` — always use `deepCastMap` before `fromJson` (see BJ-002).
-- **Depth limit:** subfolders at max depth are leaves; their files are not listed unless you increase depth or scan unlimited.
-- **Large trees:** `treeText` and full `root` JSON are held in memory and on disk — very large ROM sets may be slow to save/render.
-- **Hot reload** is insufficient after Kotlin or `MainActivity` changes — full restart required.
-- **Scan overlay** only starts after folder selection on Android; system picker is unchanged.
+- **Android `rootPath`** is a `content://` URI — never pass to `dart:io` `File` or `Directory`.
+- **Platform channel maps** arrive as `Map<Object?, Object?>` — use `deepCastMap` before any `fromJson` (scan results and import).
+- **Mobile export** requires `bytes` on `saveFile`; desktop requires writing to returned path (see BJ-007).
+- **Depth limit:** subfolders at `maxDepth` are leaves; files inside those subfolders are not listed.
+- **Large trees:** full `root` + `treeText` stored in memory and JSON — 800+ file trees work but save/scroll may lag.
+- **Hot reload** insufficient after `MainActivity.kt` changes — full restart required.
+- **No scan cancel** — user must wait for completion on large directories.
 
 ---
 
