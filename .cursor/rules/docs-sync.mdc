@@ -1,0 +1,26 @@
+---
+description: Keep docs/ in sync when changing Tree Builder behavior or architecture
+alwaysApply: true
+---
+
+# Documentation sync (Tree Builder)
+
+After any task that changes app behavior, architecture, bugs, or fixes, update these three files under `docs/`:
+
+| File | Update when |
+|------|-------------|
+| `source control log.md` | Features, fixes, or user-facing changes — add **Updates** bullet with date and **Action** if needed |
+| `Features and Inner Workings.md` | Behavior, data model, file locations, or platform details change |
+| `bug journal.md` | Bug found or fixed — new **BJ-###** entry; cross-link from source control log |
+
+## Workflow
+
+1. Make code changes.
+2. Before finishing, update the relevant doc(s) — do not skip if anything user-visible or architectural changed.
+3. For bug fixes: bug journal first (symptom/cause/fix), then one-line summary in source control log.
+4. Bump smoke-test pass/fail in **Minimum for next release** when verified on device.
+5. Commit hashes stay *Not committed yet* until the user commits.
+
+## Cross-references
+
+Each doc links to the other two. Keep roles separate: changelog = *what* shipped; Features = *how it works*; bug journal = *why it broke*.

@@ -20,33 +20,41 @@ current release: 1
 
 - **Android — platform channel map cast (Jun 11 2026):** Fixed crash `type '_Map<Object?, Object?>' is not a subtype of type 'Map<String, dynamic>'` when parsing native scan results. **Action:** Full restart on Android.
 
-- **Android — NDK alignment (Jun 11 2026):** Set `ndkVersion = "27.0.12077973"` in `android/app/build.gradle.kts` to match `file_picker`, `path_provider_android`, and `flutter_plugin_android_lifecycle`. **Action:** Rebuild if NDK warning reappears.
+- **Android — NDK alignment (Jun 11 2026):** Set `ndkVersion = "27.0.12077973"` in `android/app/build.gradle.kts`. **Action:** Rebuild if NDK warning reappears.
 
-- **Scan UX — loading overlay & background scan (Jun 11 2026):** Full-screen progress overlay with folder/file counts and phase labels (Scanning → Building tree → Saving). Android scan runs on a background thread; tree parse/render runs in a Dart isolate. Overlay appears after folder pick, not during the system picker. **Action:** Full restart on Android (native code changed).
+- **Scan UX — loading overlay & background scan (Jun 11 2026):** Full-screen progress overlay with folder/file counts and phase labels. Android scan on background thread; parse in Dart isolate. **Action:** Full restart on Android.
 
-- **Export/import — mobile bytes (Jun 11 2026):** Android/iOS export passes UTF-8 `Uint8List` bytes to `file_picker` `saveFile`; desktop uses returned path + `File.writeAsBytes`. Import uses `withData: true` and `deepCastMap` for JSON parsing on mobile. **Action:** Hot restart; retry export as JSON or text.
+- **Export/import — mobile bytes (Jun 11 2026):** Android/iOS export passes UTF-8 bytes to `saveFile`; import uses `withData: true`. **Action:** Hot restart.
+
+- **Collapsible tree UI (Jun 11 2026):** Interactive folder expand/collapse in home preview and tree detail. Tap folders with chevrons; **Expand all** / **Collapse all** in detail app bar. Default: all folders collapsed (top level only). **Action:** Hot restart.
+
+- **Export visible tree only (Jun 11 2026):** Copy, text export, and JSON `treeText` field reflect the currently expanded/collapsed view, not the full tree. Full `root` JSON structure is still exported for re-import. **Action:** Hot restart.
+
+- **Expand all folders checkbox (Jun 11 2026):** New home-screen option above **Limit folder depth**. When checked, generated trees start fully expanded; saved as `expandAllFolders` on `TreeBuild`. Default unchecked (collapsed). **Action:** Hot restart.
 
 ## Focus for next release
 
-- Confirm export/import round-trip on device after BJ-007 fix (JSON + text).
-- Profile memory on very large trees (1000+ files) during save and scroll.
-- iOS: smoke-test SAF-equivalent flows if/when iOS directory scan is added.
+- Confirm export/import round-trip on Android after BJ-007 fix.
+- Profile collapsible tree scroll performance on 800+ file trees.
+- iOS: smoke-test directory scan and mobile export.
 
 ## Minimum for next release
 
-- Smoke test: Pick folder → tree shows both folders and files on Android — (**passed** Jun 11 2026, e.g. `Video Games` — 215 folders, 851 files including `.cci` / `.3ds`).
-- Smoke test: Limit depth to 3 → nested folders truncate, files at allowed depth visible — (**not verified** on device).
-- Smoke test: Scan shows loading overlay with live counts, no black freeze — (**passed** Jun 11 2026, overlay shipped; user confirmed scan completes).
-- Smoke test: Library save, open, delete — (**passed** Jun 11 2026, tree visible in library/detail).
-- Smoke test: Export JSON/text from tree detail on Android — (**failed** Jun 11 2026 pre-fix; **pending** re-test after BJ-007 fix).
-- Smoke test: Import JSON from library toolbar — (**not verified**).
-- Smoke test: macOS/desktop pick directory → full tree with files — (**passed** Jun 11 2026, unit tests).
+- Smoke test: Pick folder → folders and files on Android — (**passed** Jun 11 2026, `Video Games` — 215 folders, 851 files).
+- Smoke test: Limit depth to 3 — (**not verified** on device).
+- Smoke test: Loading overlay, no black freeze — (**passed** Jun 11 2026).
+- Smoke test: Library save, open, delete — (**passed** Jun 11 2026).
+- Smoke test: Collapse/expand folders; export matches visible tree — (**not verified**).
+- Smoke test: **Expand all folders** checkbox → fully expanded on generate — (**not verified**).
+- Smoke test: Export JSON/text on Android — (**pending** re-test after BJ-007 fix).
+- Smoke test: Import JSON — (**not verified**).
+- Smoke test: macOS/desktop scan — (**passed** Jun 11 2026, unit tests).
 
 ## Future plans
 
 - Optional filters (hide `node_modules`, dotfiles, etc.).
 - Search within generated tree.
 - Cancel button for long scans.
-- Persist Android tree URI bookmarks for re-scan without re-picking folder.
+- Persist Android tree URI bookmarks for re-scan.
 - Progress percentage when total entry count is known.
-- Share sheet export (Android `ACTION_SEND`) as alternative to save dialog.
+- Share sheet export (Android `ACTION_SEND`).

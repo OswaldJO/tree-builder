@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/tree_build.dart';
 import '../services/tree_export_service.dart';
+import '../widgets/collapsible_tree_view.dart';
 import '../widgets/tree_text_view.dart';
 
-class TreeViewScreen extends StatelessWidget {
+class TreeViewScreen extends StatefulWidget {
   const TreeViewScreen({
     super.key,
     required this.treeBuild,
@@ -15,87 +16,132 @@ class TreeViewScreen extends StatelessWidget {
   final VoidCallback? onDelete;
 
   @override
-  Widget build(BuildContext context) {
-    final exportService = TreeExportService();
+  State<TreeViewScreen> createState() => _TreeViewScreenState();
+}
 
+class _TreeViewScreenState extends State<TreeViewScreen> {
+  final _treeKey = GlobalKey<CollapsibleTreeViewState>();
+  final _exportService = TreeExportService();
+
+  String get _visibleTreeText =>
+      _treeKey.currentState?.visibleTreeText ?? widget.treeBuild.treeText;
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(treeBuild.rootName),
+        title: Text(widget.treeBuild.rootName),
         actions: [
           IconButton(
-            tooltip: 'Copy tree',
+            tooltip: 'Expand all folders',
+            icon: const Icon(Icons.unfold_more),
+            onPressed: () => _treeKey.currentState?.expandAll(),
+          ),
+          IconButton(
+            tooltip: 'Collapse all folders',
+            icon: const Icon(Icons.unfold_less),
+            onPressed: () => _treeKey.currentState?.collapseAll(),
+          ),
+          IconButton(
+            tooltip: 'Copy visible tree',
             icon: const Icon(Icons.copy),
             onPressed: () =>
-                TreeTextView.copyToClipboard(context, treeBuild.treeText),
+                TreeTextView.copyToClipboard(context, _visibleTreeText),
           ),
           PopupMenuButton<String>(
-            onSelected: (value) async {
-              try {
-                String? path;
-                if (value == 'json') {
-                  path = await exportService.exportAsJson(treeBuild);
-                } else if (value == 'text') {
-                  path = await exportService.exportAsText(treeBuild);
-                }
-                if (context.mounted && path != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Exported to $path')),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Export failed: $e')),
-                  );
-                }
-              }
-            },
+            onSelected: (value) => _export(value),
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'json', child: Text('Export as JSON')),
               PopupMenuItem(value: 'text', child: Text('Export as Text')),
             ],
           ),
-          if (onDelete != null)
+          if (widget.onDelete != null)
             IconButton(
               tooltip: 'Delete',
               icon: const Icon(Icons.delete_outline),
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Delete tree?'),
-                    content: Text(
-                      'Remove "${treeBuild.rootName}" from your library?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Delete'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed == true) {
-                  onDelete?.call();
-                  if (context.mounted) Navigator.pop(context);
-                }
-              },
+              onPressed: _confirmDelete,
             ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _InfoCard(treeBuild: treeBuild),
-          const SizedBox(height: 16),
-          TreeTextView(treeText: treeBuild.treeText),
+          _InfoCard(treeBuild: widget.treeBuild),
+          const SizedBox(height: 8),
+          Text(
+            'Tap folders to expand or collapse. Copy and text export use the visible tree only.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.55,
+            child: CollapsibleTreeView(
+              key: _treeKey,
+              rootName: widget.treeBuild.rootName,
+              root: widget.treeBuild.root,
+              initialExpandAll: widget.treeBuild.expandAllFolders,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _export(String value) async {
+    try {
+      String? path;
+      final visibleText = _visibleTreeText;
+      if (value == 'json') {
+        path = await _exportService.exportAsJson(
+          widget.treeBuild,
+          treeText: visibleText,
+        );
+      } else if (value == 'text') {
+        path = await _exportService.exportAsText(
+          widget.treeBuild,
+          treeText: visibleText,
+        );
+      }
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Exported visible tree to $path')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete tree?'),
+        content: Text(
+          'Remove "${widget.treeBuild.rootName}" from your library?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      widget.onDelete?.call();
+      if (mounted) Navigator.pop(context);
+    }
   }
 }
 

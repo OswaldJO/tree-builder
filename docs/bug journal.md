@@ -12,27 +12,27 @@ For architecture context, see `Features and Inner Workings.md`.
 | | |
 |---|---|
 | **When** | 2026-06-11 |
-| **Symptom** | ASCII tree listed folder hierarchy (e.g. `PSP/GAME/`, `3DS/Games/`) but no game files (`.iso`, `.chd`, `.cci`, `.3ds`, etc.). |
-| **Cause** | (1) Dart scanner only added entries when `FileSystemEntity.type` returned `file` or `link`, silently skipping other types. (2) On Android, SAF tree URIs are not plain paths; `dart:io` `Directory.list()` does not reliably enumerate files under scoped storage. |
-| **Fix** | Desktop: treat any non-directory as a file; use `entity is File` / `entity is Directory` from `list()`. Android: native `DocumentFile` recursive scan via `MethodChannel` (`pickDirectory` + `scanDirectory`), persistable URI permission after pick. |
+| **Symptom** | ASCII tree listed folders but no game files (`.iso`, `.chd`, `.cci`, `.3ds`, etc.). |
+| **Cause** | Dart type filtering skipped files; Android SAF paths incompatible with `dart:io` file listing. |
+| **Fix** | Desktop: non-directory = file. Android: `DocumentFile` scan via platform channels. |
 | **Commit** | *Not committed yet* |
 
 ### BJ-002 — Scan crash: `Map<Object?, Object?>` is not a subtype of `Map<String, dynamic>`
 | | |
 |---|---|
 | **When** | 2026-06-11 |
-| **Symptom** | After picking folder on Android: `Failed to scan directory: type '_Map<Object?, Object?>' is not a subtype of type 'Map<String, dynamic>' in type cast`. |
-| **Cause** | `MethodChannel` returns nested maps as `Map<Object?, Object?>`. `TreeNode.fromJson` cast children directly to `Map<String, dynamic>`. |
-| **Fix** | Added `lib/utils/map_cast.dart` with `deepCastMap()` for recursive conversion before `fromJson`. |
+| **Symptom** | Android scan failed with map cast error after folder pick. |
+| **Cause** | Nested `MethodChannel` maps not `Map<String, dynamic>`. |
+| **Fix** | `lib/utils/map_cast.dart` → `deepCastMap()`. |
 | **Commit** | *Not committed yet* |
 
-### BJ-003 — Black screen / app appears frozen during tree generation
+### BJ-003 — Black screen / app frozen during tree generation
 | | |
 |---|---|
 | **When** | 2026-06-11 |
-| **Symptom** | After starting scan, screen went black; UI unresponsive for a long time on large folders (e.g. ROM libraries). |
-| **Cause** | (1) Android `scanDirectory` ran synchronously on main thread in `onActivityResult`. (2) Large map parse + `renderTree` blocked UI isolate. (3) Home screen cleared tree preview while `_scanning` hid **Browse Library**, leaving nearly empty body. |
-| **Fix** | Split Android pick (`pickDirectory`) from scan (`scanDirectory` on `Executors` thread); `EventChannel` for progress; `compute()` for parse; full-screen `ScanLoadingOverlay` with counts and phase labels. |
+| **Symptom** | Black screen; UI frozen on large folder scans. |
+| **Cause** | Main-thread scan; UI isolate parse; empty body during scan. |
+| **Fix** | Background scan, `EventChannel` progress, `compute()`, `ScanLoadingOverlay`. |
 | **Commit** | *Not committed yet* |
 
 ---
@@ -43,9 +43,9 @@ For architecture context, see `Features and Inner Workings.md`.
 | | |
 |---|---|
 | **When** | 2026-06-11 |
-| **Symptom** | `RenderFlex overflowed by X pixels on the bottom` — yellow/black stripes in `home_screen.dart` when IME visible for depth field. |
-| **Cause** | Fixed-height `Column` with `Spacer` + depth `TextField`; keyboard reduced viewport below minimum content height. |
-| **Fix** | Wrapped controls in `Flexible` + `SingleChildScrollView`; tree preview in separate `Expanded`; removed `Spacer`; overlay uses `Stack`. |
+| **Symptom** | `RenderFlex overflowed` when IME open for depth field. |
+| **Cause** | Fixed `Column` + `Spacer` with keyboard reduced height. |
+| **Fix** | Scrollable controls; `Stack` overlay; separate `Expanded` for tree. |
 | **Commit** | *Not committed yet* |
 
 ---
@@ -56,9 +56,9 @@ For architecture context, see `Features and Inner Workings.md`.
 | | |
 |---|---|
 | **When** | 2026-06-11 |
-| **Symptom** | Snackbar on tree detail export: `Export failed: Invalid argument(s): Bytes are required on Android & iOS when saving a file.` |
-| **Cause** | `TreeExportService` called `saveFile` without `bytes`, then attempted `File(path).writeAsString()` — mobile SAF save dialogs require in-memory bytes; returned path is not a writable filesystem path. |
-| **Fix** | `exportAsJson`, `exportAsText`, `exportLibraryAsJson` encode content as UTF-8 `Uint8List` and pass `bytes:` to `saveFile` on Android/iOS. Desktop unchanged: `saveFile` → path → `File.writeAsBytes`. Import: `withData: true` + `deepCastMap` for JSON. |
+| **Symptom** | `Export failed: Invalid argument(s): Bytes are required on Android & iOS when saving a file.` |
+| **Cause** | `saveFile` without `bytes`; attempted `File(path)` write on mobile. |
+| **Fix** | UTF-8 `Uint8List` to `saveFile` on mobile; `withData: true` on import. |
 | **Commit** | *Not committed yet* |
 
 ---
@@ -69,9 +69,9 @@ For architecture context, see `Features and Inner Workings.md`.
 | | |
 |---|---|
 | **When** | 2026-06-11 |
-| **Symptom** | Build warning: project NDK 26.3.x but plugins require 27.0.12077973. |
-| **Cause** | `ndkVersion = flutter.ndkVersion` in `build.gradle.kts` lagged plugin requirements. |
-| **Fix** | Set `ndkVersion = "27.0.12077973"` in `android/app/build.gradle.kts`. |
+| **Symptom** | Plugins require NDK 27.0.12077973; project used 26.3.x. |
+| **Cause** | `ndkVersion = flutter.ndkVersion` lagged. |
+| **Fix** | Pinned `ndkVersion = "27.0.12077973"`. |
 | **Commit** | *Not committed yet* |
 
 ---
@@ -81,10 +81,19 @@ For architecture context, see `Features and Inner Workings.md`.
 ### BJ-006 — Depth limit hides files inside leaf folders
 | | |
 |---|---|
-| **When** | 2026-06-11 (identified during depth feature work) |
-| **Symptom** | With **Limit folder depth** enabled, subfolders at max depth show as `name/` but files inside those folders do not appear. |
-| **Cause** | By design: at `currentDepth >= maxDepth`, subdirectories are added as leaf nodes without recursing into them. |
-| **Fix** | None planned — increase depth, disable limit, or accept truncated view. Documented in Features and Inner Workings. |
+| **When** | 2026-06-11 |
+| **Symptom** | At `maxDepth`, subfolders show as leaves without inner files. |
+| **Cause** | By design — no recursion past depth limit. |
+| **Fix** | Increase depth or disable limit. |
+| **Commit** | N/A |
+
+### BJ-008 — Manual expand/collapse not persisted to library
+| | |
+|---|---|
+| **When** | 2026-06-11 (collapsible tree feature) |
+| **Symptom** | User collapses folders in detail view; reopening from library resets to `expandAllFolders` default. |
+| **Cause** | Expansion state is in-memory in `CollapsibleTreeViewState` only; library stores `expandAllFolders` from scan options, not live UI state. |
+| **Fix** | None planned — use **Expand all folders** at scan time or re-toggle manually. Future: persist expansion paths. |
 | **Commit** | N/A (by design) |
 
 ---
@@ -93,16 +102,16 @@ For architecture context, see `Features and Inner Workings.md`.
 
 | ID | Issue | Notes |
 |----|--------|--------|
-| BJ-007 | Export on Android | Fix shipped; **pending device re-test** after hot restart. |
-| — | Import JSON on Android | Uses `withData: true`; not device-verified yet. |
-| — | Large scan memory / time | No cancel; 800+ file trees complete but may be slow to save/scroll. |
-| — | iOS directory scan | Uses `dart:io` path flow; SAF parity not implemented. |
+| BJ-007 | Export on Android | Fix shipped; **pending device re-test**. |
+| — | Import JSON on Android | `withData: true`; not device-verified. |
+| — | Collapsible tree on 800+ files | Works; full expand may be slow to scroll. |
+| — | iOS directory scan | `dart:io` only; no SAF parity. |
 
 ---
 
 ## How to add entries
 
-1. Assign the next **BJ-###** id (BJ-008 next).
+1. Assign the next **BJ-###** id (**BJ-009** next).
 2. Include **symptom**, **cause**, **fix**, and **commit** (or *in progress* / *Not committed yet*).
-3. Add a line to `source control log.md` **Updates** when the fix ships in a release.
-4. Update `Features and Inner Workings.md` if user-visible behavior or architecture changed.
+3. Add a line to `source control log.md` **Updates** when the fix ships.
+4. Update `Features and Inner Workings.md` if behavior or architecture changed.

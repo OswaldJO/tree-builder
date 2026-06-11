@@ -9,6 +9,7 @@ class TreeBuild {
     required this.treeText,
     required this.createdAt,
     this.maxDepth,
+    this.expandAllFolders = false,
   });
 
   final String id;
@@ -18,6 +19,7 @@ class TreeBuild {
   final String treeText;
   final DateTime createdAt;
   final int? maxDepth;
+  final bool expandAllFolders;
 
   int get fileCount => root.fileCount;
   int get folderCount => root.folderCount;
@@ -30,6 +32,7 @@ class TreeBuild {
     String? treeText,
     DateTime? createdAt,
     int? maxDepth,
+    bool? expandAllFolders,
   }) {
     return TreeBuild(
       id: id ?? this.id,
@@ -39,6 +42,7 @@ class TreeBuild {
       treeText: treeText ?? this.treeText,
       createdAt: createdAt ?? this.createdAt,
       maxDepth: maxDepth ?? this.maxDepth,
+      expandAllFolders: expandAllFolders ?? this.expandAllFolders,
     );
   }
 
@@ -50,6 +54,7 @@ class TreeBuild {
         'treeText': treeText,
         'createdAt': createdAt.toIso8601String(),
         if (maxDepth != null) 'maxDepth': maxDepth,
+        if (expandAllFolders) 'expandAllFolders': expandAllFolders,
       };
 
   factory TreeBuild.fromJson(Map<String, dynamic> json) {
@@ -61,6 +66,7 @@ class TreeBuild {
       treeText: json['treeText'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
       maxDepth: json['maxDepth'] as int?,
+      expandAllFolders: json['expandAllFolders'] as bool? ?? false,
     );
   }
 }

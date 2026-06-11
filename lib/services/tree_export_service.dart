@@ -8,8 +8,14 @@ import '../models/tree_build.dart';
 import '../utils/map_cast.dart';
 
 class TreeExportService {
-  Future<String?> exportAsJson(TreeBuild build) async {
-    final contents = const JsonEncoder.withIndent('  ').convert(build.toJson());
+  Future<String?> exportAsJson(
+    TreeBuild build, {
+    String? treeText,
+  }) async {
+    final exportBuild =
+        treeText != null ? build.copyWith(treeText: treeText) : build;
+    final contents =
+        const JsonEncoder.withIndent('  ').convert(exportBuild.toJson());
     return _saveString(
       dialogTitle: 'Export Tree as JSON',
       fileName: '${build.rootName}_tree.json',
@@ -18,12 +24,15 @@ class TreeExportService {
     );
   }
 
-  Future<String?> exportAsText(TreeBuild build) async {
+  Future<String?> exportAsText(
+    TreeBuild build, {
+    String? treeText,
+  }) async {
     return _saveString(
       dialogTitle: 'Export Tree as Text',
       fileName: '${build.rootName}_tree.txt',
       extension: 'txt',
-      contents: build.treeText,
+      contents: treeText ?? build.treeText,
     );
   }
 

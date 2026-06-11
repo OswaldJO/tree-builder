@@ -8,6 +8,7 @@ import '../models/scan_progress.dart';
 import '../models/tree_build.dart';
 import '../services/directory_scanner.dart';
 import '../services/tree_storage_service.dart';
+import '../widgets/collapsible_tree_view.dart';
 import '../widgets/scan_loading_overlay.dart';
 import 'library_screen.dart';
 import 'tree_view_screen.dart';
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _storage = TreeStorageService();
   final _depthController = TextEditingController(text: '3');
   bool _scanning = false;
+  bool _expandAllFolders = false;
   bool _limitDepth = false;
   TreeBuild? _currentBuild;
   ScanProgress _scanProgress = const ScanProgress(folders: 0, files: 0);
@@ -105,10 +107,11 @@ class _HomeScreenState extends State<HomeScreen> {
         _scanProgress.copyWith(phase: ScanPhase.saving),
       );
 
-      await _storage.save(build);
+      final saved = build.copyWith(expandAllFolders: _expandAllFolders);
+      await _storage.save(saved);
       if (mounted) {
         setState(() {
-          _currentBuild = build;
+          _currentBuild = saved;
           _scanning = false;
         });
       }
@@ -203,6 +206,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                   contentPadding: EdgeInsets.zero,
                                   controlAffinity:
                                       ListTileControlAffinity.leading,
+                                  title: const Text('Expand all folders'),
+                                  subtitle: const Text(
+                                    'Show every folder expanded in the generated tree',
+                                  ),
+                                  value: _expandAllFolders,
+                                  onChanged: _scanning
+                                      ? null
+                                      : (value) => setState(
+                                            () => _expandAllFolders =
+                                                value ?? false,
+                                          ),
+                                ),
+                                CheckboxListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
                                   title: const Text('Limit folder depth'),
                                   subtitle: _limitDepth
                                       ? Text(
@@ -278,25 +297,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (_currentBuild != null) ...[
                   const SizedBox(height: 8),
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest
-                            .withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: SingleChildScrollView(
-                        child: SelectableText(
-                          _currentBuild!.treeText,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontFamily: 'monospace',
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
+                    child: CollapsibleTreeView(
+                      key: ValueKey(_currentBuild!.id),
+                      rootName: _currentBuild!.rootName,
+                      root: _currentBuild!.root,
+                      initialExpandAll: _currentBuild!.expandAllFolders,
                     ),
                   ),
                 ],

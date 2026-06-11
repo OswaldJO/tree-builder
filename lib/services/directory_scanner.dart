@@ -6,6 +6,7 @@ import '../models/scan_progress.dart';
 import '../models/tree_build.dart';
 import '../models/tree_node.dart';
 import '../utils/map_cast.dart';
+import '../utils/tree_renderer.dart';
 import 'android_tree_scanner.dart';
 
 class DirectoryScanner {
@@ -65,7 +66,7 @@ class DirectoryScanner {
     onProgress?.call(
       counters.toProgress().copyWith(phase: ScanPhase.building),
     );
-    final treeText = renderTree(rootName, root.children);
+    final treeText = TreeRenderer.renderFull(rootName, root.children);
 
     return TreeBuild(
       id: _uuid.v4(),
@@ -93,7 +94,7 @@ class DirectoryScanner {
       rootPath: rootPath,
       rootName: rootName,
       root: root,
-      treeText: renderTree(rootName, root.children),
+      treeText: TreeRenderer.renderFull(rootName, root.children),
       createdAt: DateTime.now(),
       maxDepth: maxDepth,
     );
@@ -177,32 +178,6 @@ class DirectoryScanner {
     if (entity is File) return false;
     return FileSystemEntity.typeSync(entity.path, followLinks: false) ==
         FileSystemEntityType.directory;
-  }
-
-  static String renderTree(String rootName, List<TreeNode> children) {
-    final buffer = StringBuffer('$rootName/\n');
-    for (var i = 0; i < children.length; i++) {
-      final isLast = i == children.length - 1;
-      buffer.write(_renderNode(children[i], '', isLast));
-    }
-    return buffer.toString().trimRight();
-  }
-
-  static String _renderNode(TreeNode node, String prefix, bool isLast) {
-    final connector = isLast ? '└── ' : '├── ';
-    final childPrefix = isLast ? '    ' : '│   ';
-    final displayName = node.isDirectory ? '${node.name}/' : node.name;
-
-    final buffer = StringBuffer('$prefix$connector$displayName\n');
-
-    for (var i = 0; i < node.children.length; i++) {
-      final childIsLast = i == node.children.length - 1;
-      buffer.write(
-        _renderNode(node.children[i], prefix + childPrefix, childIsLast),
-      );
-    }
-
-    return buffer.toString();
   }
 
   static String _basename(String path) {
