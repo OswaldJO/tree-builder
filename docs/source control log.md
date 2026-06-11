@@ -32,9 +32,14 @@ current release: 1
 
 - **Expand all folders checkbox (Jun 11 2026):** New home-screen option above **Limit folder depth**. When checked, generated trees start fully expanded; saved as `expandAllFolders` on `TreeBuild`. Default unchecked (collapsed). **Action:** Hot restart.
 
+- **Remote scan — SMB & SFTP (Jun 11 2026):** Home screen source selector: **Local**, **SMB**, or **SFTP**. Remote sources open a connection dialog (host, credentials, path); pure-Dart scanners via `smb_connect` and `dartssh2`. `TreeBuild.scanSourceType` and display URI stored in library (passwords never saved). Android `INTERNET` permission added. **Action:** Full restart; macOS rebuild for network client entitlement.
+
+- **Settings + remote directory picker (Jun 11 2026):** Gear icon in app bar opens **Settings** for SMB/SFTP credentials (saved to `remote_settings.json`). **Choose Directory** is unified for all sources; SMB/SFTP browse shares/folders in a picker before scanning the selected folder only. **Action:** Hot restart; configure remote connections in Settings first.
+
 ## Focus for next release
 
 - Confirm export/import round-trip on Android after BJ-007 fix.
+- Smoke-test SMB/SFTP scan against a real server.
 - Profile collapsible tree scroll performance on 800+ file trees.
 - iOS: smoke-test directory scan and mobile export.
 
@@ -46,6 +51,8 @@ current release: 1
 - Smoke test: Library save, open, delete — (**passed** Jun 11 2026).
 - Smoke test: Collapse/expand folders; export matches visible tree — (**not verified**).
 - Smoke test: **Expand all folders** checkbox → fully expanded on generate — (**not verified**).
+- Smoke test: SMB connect & scan — (**not verified**).
+- Smoke test: SFTP connect & scan — (**not verified**).
 - Smoke test: Export JSON/text on Android — (**pending** re-test after BJ-007 fix).
 - Smoke test: Import JSON — (**not verified**).
 - Smoke test: macOS/desktop scan — (**passed** Jun 11 2026, unit tests).

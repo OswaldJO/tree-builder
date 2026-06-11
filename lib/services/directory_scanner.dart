@@ -8,6 +8,7 @@ import '../models/tree_node.dart';
 import '../utils/map_cast.dart';
 import '../utils/tree_renderer.dart';
 import 'android_tree_scanner.dart';
+import 'scan_counters.dart';
 
 class DirectoryScanner {
   const DirectoryScanner();
@@ -51,7 +52,7 @@ class DirectoryScanner {
     }
 
     final rootName = _basename(path);
-    final counters = _ScanCounters();
+    final counters = ScanCounters();
     onProgress?.call(const ScanProgress(folders: 0, files: 0));
 
     final root = await _buildNode(
@@ -105,7 +106,7 @@ class DirectoryScanner {
     String name, {
     required int currentDepth,
     int? maxDepth,
-    _ScanCounters? counters,
+    ScanCounters? counters,
     void Function(ScanProgress progress)? onProgress,
   }) async {
     final children = <TreeNode>[];
@@ -185,32 +186,6 @@ class DirectoryScanner {
       path = path.substring(0, path.length - 1);
     }
     return path.split(Platform.pathSeparator).last;
-  }
-}
-
-class _ScanCounters {
-  int folders = 0;
-  int files = 0;
-  int _itemsSinceReport = 0;
-
-  Future<void> maybeReport(
-    String name,
-    void Function(ScanProgress)? onProgress,
-  ) async {
-    _itemsSinceReport++;
-    if (_itemsSinceReport >= 25) {
-      _itemsSinceReport = 0;
-      onProgress?.call(toProgress(currentName: name));
-      await Future<void>.delayed(Duration.zero);
-    }
-  }
-
-  ScanProgress toProgress({String? currentName}) {
-    return ScanProgress(
-      folders: folders,
-      files: files,
-      currentName: currentName,
-    );
   }
 }
 

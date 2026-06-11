@@ -1,3 +1,4 @@
+import 'scan_source_type.dart';
 import 'tree_node.dart';
 
 class TreeBuild {
@@ -10,6 +11,7 @@ class TreeBuild {
     required this.createdAt,
     this.maxDepth,
     this.expandAllFolders = false,
+    this.scanSourceType = ScanSourceType.local,
   });
 
   final String id;
@@ -20,6 +22,7 @@ class TreeBuild {
   final DateTime createdAt;
   final int? maxDepth;
   final bool expandAllFolders;
+  final ScanSourceType scanSourceType;
 
   int get fileCount => root.fileCount;
   int get folderCount => root.folderCount;
@@ -33,6 +36,7 @@ class TreeBuild {
     DateTime? createdAt,
     int? maxDepth,
     bool? expandAllFolders,
+    ScanSourceType? scanSourceType,
   }) {
     return TreeBuild(
       id: id ?? this.id,
@@ -43,6 +47,7 @@ class TreeBuild {
       createdAt: createdAt ?? this.createdAt,
       maxDepth: maxDepth ?? this.maxDepth,
       expandAllFolders: expandAllFolders ?? this.expandAllFolders,
+      scanSourceType: scanSourceType ?? this.scanSourceType,
     );
   }
 
@@ -55,6 +60,8 @@ class TreeBuild {
         'createdAt': createdAt.toIso8601String(),
         if (maxDepth != null) 'maxDepth': maxDepth,
         if (expandAllFolders) 'expandAllFolders': expandAllFolders,
+        if (scanSourceType != ScanSourceType.local)
+          'scanSourceType': scanSourceType.name,
       };
 
   factory TreeBuild.fromJson(Map<String, dynamic> json) {
@@ -67,6 +74,15 @@ class TreeBuild {
       createdAt: DateTime.parse(json['createdAt'] as String),
       maxDepth: json['maxDepth'] as int?,
       expandAllFolders: json['expandAllFolders'] as bool? ?? false,
+      scanSourceType: _parseScanSourceType(json['scanSourceType'] as String?),
+    );
+  }
+
+  static ScanSourceType _parseScanSourceType(String? value) {
+    if (value == null) return ScanSourceType.local;
+    return ScanSourceType.values.firstWhere(
+      (type) => type.name == value,
+      orElse: () => ScanSourceType.local,
     );
   }
 }

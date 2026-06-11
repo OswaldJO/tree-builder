@@ -38,6 +38,8 @@ dependencies:
   path_provider: ^2.1.5
   uuid: ^4.5.1
   intl: ^0.20.2
+  dartssh2: ^2.14.0
+  smb_connect: ^0.0.9
 
 dev_dependencies:
   flutter_test:

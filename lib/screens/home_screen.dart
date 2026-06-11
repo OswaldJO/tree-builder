@@ -5,12 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/scan_progress.dart';
+import '../models/scan_source_type.dart';
 import '../models/tree_build.dart';
 import '../services/directory_scanner.dart';
+import '../services/remote_settings_service.dart';
+import '../services/sftp_directory_scanner.dart';
+import '../services/smb_directory_scanner.dart';
 import '../services/tree_storage_service.dart';
 import '../widgets/collapsible_tree_view.dart';
 import '../widgets/scan_loading_overlay.dart';
 import 'library_screen.dart';
+import 'remote_directory_picker_screen.dart';
+import 'settings_screen.dart';
 import 'tree_view_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,10 +29,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _scanner = const DirectoryScanner();
   final _storage = TreeStorageService();
+  final _settingsService = RemoteSettingsService();
   final _depthController = TextEditingController(text: '3');
   bool _scanning = false;
   bool _expandAllFolders = false;
   bool _limitDepth = false;
+  ScanSourceType _scanSource = ScanSourceType.local;
   TreeBuild? _currentBuild;
   ScanProgress _scanProgress = const ScanProgress(folders: 0, files: 0);
 
@@ -47,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _scanProgress = progress);
   }
 
-  Future<void> _pickDirectory() async {
+  Future<void> _startScan() async {
     int? maxDepth;
     if (_limitDepth) {
       maxDepth = _parsedMaxDepth();
@@ -64,38 +72,19 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       TreeBuild? build;
 
-      if (Platform.isAndroid) {
-        build = await _scanner.pickAndScan(
-          maxDepth: maxDepth,
-          onProgress: (progress) {
-            if (!_scanning && mounted) {
-              setState(() {
-                _scanning = true;
-                _currentBuild = null;
-                _scanProgress = progress;
-              });
-            } else {
-              _updateScanProgress(progress);
-            }
-          },
-        );
-      } else {
-        final path = await FilePicker.platform.getDirectoryPath(
-          dialogTitle: 'Select a directory to scan',
-        );
-        if (path == null) return;
-
-        setState(() {
-          _scanning = true;
-          _currentBuild = null;
-          _scanProgress = const ScanProgress(folders: 0, files: 0);
-        });
-
-        build = await _scanner.pickAndScan(
-          path: path,
-          maxDepth: maxDepth,
-          onProgress: _updateScanProgress,
-        );
+      switch (_scanSource) {
+        case ScanSourceType.local:
+          build = await _scanLocal(maxDepth);
+        case ScanSourceType.smb:
+          build = await _scanRemote(
+            sourceType: ScanSourceType.smb,
+            maxDepth: maxDepth,
+          );
+        case ScanSourceType.sftp:
+          build = await _scanRemote(
+            sourceType: ScanSourceType.sftp,
+            maxDepth: maxDepth,
+          );
       }
 
       if (build == null) {
@@ -125,10 +114,123 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<TreeBuild?> _scanRemote({
+    required ScanSourceType sourceType,
+    required int? maxDepth,
+  }) async {
+    final settings = await _settingsService.load();
+    final isSmb = sourceType == ScanSourceType.smb;
+    final configured =
+        isSmb ? settings.smb.isConfigured : settings.sftp.isConfigured;
+
+    if (!configured) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Configure ${sourceType.label} in Settings first',
+          ),
+          action: SnackBarAction(
+            label: 'Settings',
+            onPressed: _openSettings,
+          ),
+        ),
+      );
+      return null;
+    }
+
+    if (!mounted) return null;
+    final remotePath = await pickRemoteDirectory(
+      context,
+      sourceType: sourceType,
+      smbSettings: settings.smb,
+      sftpSettings: settings.sftp,
+    );
+    if (remotePath == null) return null;
+
+    setState(() {
+      _scanning = true;
+      _currentBuild = null;
+      _scanProgress = const ScanProgress(folders: 0, files: 0);
+    });
+
+    if (isSmb) {
+      return SmbDirectoryScanner(
+        settings: settings.smb,
+        remotePath: remotePath,
+      ).scan(
+        maxDepth: maxDepth,
+        onProgress: _updateScanProgress,
+      );
+    }
+
+    return SftpDirectoryScanner(
+      settings: settings.sftp,
+      remotePath: remotePath,
+    ).scan(
+      maxDepth: maxDepth,
+      onProgress: _updateScanProgress,
+    );
+  }
+
+  Future<TreeBuild?> _scanLocal(int? maxDepth) async {
+    if (Platform.isAndroid) {
+      return _scanner.pickAndScan(
+        maxDepth: maxDepth,
+        onProgress: (progress) {
+          if (!_scanning && mounted) {
+            setState(() {
+              _scanning = true;
+              _currentBuild = null;
+              _scanProgress = progress;
+            });
+          } else {
+            _updateScanProgress(progress);
+          }
+        },
+      );
+    }
+
+    final path = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Select a directory to scan',
+    );
+    if (path == null) return null;
+
+    setState(() {
+      _scanning = true;
+      _currentBuild = null;
+      _scanProgress = const ScanProgress(folders: 0, files: 0);
+    });
+
+    return _scanner.pickAndScan(
+      path: path,
+      maxDepth: maxDepth,
+      onProgress: _updateScanProgress,
+    );
+  }
+
+  String get _sourceDescription {
+    switch (_scanSource) {
+      case ScanSourceType.local:
+        return 'Pick a folder on this device or via the system file picker.';
+      case ScanSourceType.smb:
+        return 'Browse shares on your configured SMB server and pick a folder.';
+      case ScanSourceType.sftp:
+        return 'Browse folders on your configured SFTP server and pick one to scan.';
+    }
+  }
+
   void _openLibrary() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const LibraryScreen()),
+    );
+  }
+
+  void _openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsScreen()),
     );
   }
 
@@ -152,6 +254,11 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Tree Builder'),
         actions: [
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: _scanning ? null : _openSettings,
+          ),
           IconButton(
             tooltip: 'Library',
             icon: const Icon(Icons.collections_bookmark_outlined),
@@ -195,9 +302,51 @@ class _HomeScreenState extends State<HomeScreen> {
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
+                                const SizedBox(height: 16),
+                                SegmentedButton<ScanSourceType>(
+                                  segments: ScanSourceType.values
+                                      .map(
+                                        (source) => ButtonSegment(
+                                          value: source,
+                                          label: Text(source.label),
+                                          icon: Icon(
+                                            source == ScanSourceType.local
+                                                ? Icons.folder_outlined
+                                                : source == ScanSourceType.smb
+                                                    ? Icons.lan_outlined
+                                                    : Icons.cloud_outlined,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  selected: {_scanSource},
+                                  onSelectionChanged: _scanning
+                                      ? null
+                                      : (selection) => setState(
+                                            () => _scanSource = selection.first,
+                                          ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _sourceDescription,
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                if (_scanSource != ScanSourceType.local) ...[
+                                  const SizedBox(height: 8),
+                                  TextButton.icon(
+                                    onPressed: _scanning ? null : _openSettings,
+                                    icon: const Icon(Icons.settings_outlined),
+                                    label: Text(
+                                      'Configure ${_scanSource.label} in Settings',
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 24),
                                 FilledButton.icon(
-                                  onPressed: _scanning ? null : _pickDirectory,
+                                  onPressed: _scanning ? null : _startScan,
                                   icon: const Icon(Icons.drive_folder_upload),
                                   label: const Text('Choose Directory'),
                                 ),

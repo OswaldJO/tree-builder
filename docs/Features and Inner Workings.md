@@ -10,12 +10,14 @@ For a short, commit-adjacent summary of recent changes, see `source control log.
 - **Stack:** Flutter (Material 3), Dart 3.8+.
 - **Persistence:** Single JSON file `tree_library.json` in app documents directory (`TreeStorageService`).
 - **Navigation:** Home screen + pushed routes for **Library** and **Tree detail**.
-- **Platforms:** Android (SAF-native scan), macOS/desktop/iOS (`file_picker` + `dart:io` scan).
+- **Platforms:** Android (SAF-native scan), macOS/desktop/iOS (`file_picker` + `dart:io` scan), plus **SMB** and **SFTP** remote scan on all platforms.
 
 | Concern | Package / mechanism |
 |---------|---------------------|
 | Directory pick (desktop) | `file_picker` `getDirectoryPath()` |
 | Directory pick + scan (Android) | Custom `MethodChannel` + `EventChannel` in `MainActivity.kt` |
+| Remote scan (SMB) | `smb_connect` — `SmbDirectoryScanner` |
+| Remote scan (SFTP) | `dartssh2` — `SftpDirectoryScanner` |
 | Local library | `path_provider` + JSON file |
 | Export / import | `file_picker` save/open dialogs (platform-specific bytes vs path) |
 | Tree rendering | `TreeRenderer` + `CollapsibleTreeView` |
@@ -26,12 +28,27 @@ For a short, commit-adjacent summary of recent changes, see `source control log.
 
 **File:** `lib/screens/home_screen.dart`
 
+### Choose directory source
+
+Home screen **segmented control**: **Local** | **SMB** | **SFTP**.
+
+| Source | Flow |
+|--------|------|
+| **Local** | System folder picker (Android SAF or `file_picker`) |
+| **SMB** | Settings credentials → browse shares/folders → scan selected folder |
+| **SFTP** | Settings credentials → browse remote folders → scan selected folder |
+
+Remote credentials live in **Settings** (gear icon in app bar). Passwords are stored locally in `remote_settings.json` on the device — not in tree library exports.
+
 ### Choose Directory
 
-1. User taps **Choose Directory**.
-2. **Android:** `DirectoryScanner.pickAndScan()` → `pickDirectory` → background `scanDirectory`.
-3. **Other platforms:** `getDirectoryPath()` → `_scanWithIo()`.
-4. Result saved to library with scan options; collapsible preview shown; **Open** → tree detail.
+1. User selects source and taps **Choose Directory**.
+2. **Local — Android:** `DirectoryScanner.pickAndScan()` → SAF pick → background scan.
+3. **Local — other:** `getDirectoryPath()` → `_scanWithIo()`.
+4. **SMB/SFTP:** load settings → `RemoteDirectoryPickerScreen` → scan only the selected path.
+5. Result saved to library; collapsible preview shown; **Open** → tree detail.
+
+**Files:** `lib/screens/settings_screen.dart`, `lib/screens/remote_directory_picker_screen.dart`, `lib/services/remote_settings_service.dart`, `lib/services/smb_remote_browser.dart`, `lib/services/sftp_remote_browser.dart`
 
 ### Scan options (checkboxes, top to bottom)
 
@@ -59,6 +76,30 @@ For a short, commit-adjacent summary of recent changes, see `source control log.
 - Lists `TreeBuild` entries (newest first): name, date, folder/file counts.
 - **Import** / **Export all** (JSON).
 - Tap → tree detail; delete from detail screen.
+
+---
+
+## Settings
+
+**File:** `lib/screens/settings_screen.dart`
+
+- App bar gear icon on home screen.
+- **SMB:** host, domain (optional), username, password.
+- **SFTP:** host, port, username, password.
+- Persisted via `RemoteSettingsService` → `{appDocuments}/remote_settings.json`.
+
+---
+
+## Remote directory picker
+
+**File:** `lib/screens/remote_directory_picker_screen.dart`
+
+| Protocol | Browse behavior |
+|----------|-----------------|
+| **SMB** | Lists shares at root, then subfolders; **Select this folder** enabled inside a share |
+| **SFTP** | Starts at `/`; navigate into subfolders; select any folder including root |
+
+Browsers: `SmbRemoteBrowser`, `SftpRemoteBrowser`. Connection closed when picker is dismissed.
 
 ---
 
@@ -122,6 +163,26 @@ For a short, commit-adjacent summary of recent changes, see `source control log.
 
 Background `DocumentFile` scan → `compute()` + `deepCastMap` → `TreeRenderer.renderFull`.
 
+### SMB (Samba/CIFS)
+
+**File:** `lib/services/smb_directory_scanner.dart`
+
+- Connect via `SmbConnect.connectAuth(host, username, password, domain)`.
+- Path format: `/share/folder/subfolder` — first segment is the SMB share name.
+- `listFiles()` recursion with same depth limit and progress reporting as local scan.
+- `rootPath` stored as `smb://host/share/path` (no credentials).
+
+### SFTP
+
+**File:** `lib/services/sftp_directory_scanner.dart`
+
+- Connect via `SSHSocket` + `SSHClient` + `client.sftp()`.
+- Password auth via `onPasswordRequest`.
+- `listdir()` recursion; dirs first, then alpha.
+- `rootPath` stored as `sftp://host[:port]/path`.
+
+Shared progress helper: `lib/services/scan_counters.dart`.
+
 ---
 
 ## Export / import
@@ -157,13 +218,14 @@ Background `DocumentFile` scan → `compute()` + `deepCastMap` → `TreeRenderer
 | Field | Type | Notes |
 |-------|------|-------|
 | `id` | String | UUID v4 |
-| `rootPath` | String | Path or Android `content://` URI |
+| `rootPath` | String | Local path, Android `content://` URI, or remote display URI (`smb://…`, `sftp://…`) |
 | `rootName` | String | Display name |
 | `root` | TreeNode | Full tree (always complete) |
 | `treeText` | String | Full ASCII at scan time (`renderFull`) |
 | `createdAt` | DateTime | ISO 8601 |
 | `maxDepth` | int? | Scan depth limit; omitted if unlimited |
 | `expandAllFolders` | bool | Default `false`; initial UI expansion |
+| `scanSourceType` | enum | `local` (default), `smb`, or `sftp` |
 
 ### `ScanProgress` — `lib/models/scan_progress.dart`
 
@@ -182,8 +244,9 @@ Background `DocumentFile` scan → `compute()` + `deepCastMap` → `TreeRenderer
 | Item | Location |
 |------|----------|
 | NDK | `27.0.12077973` in `android/app/build.gradle.kts` |
+| INTERNET permission | `android/app/src/main/AndroidManifest.xml` (SMB/SFTP) |
 | DocumentFile | `androidx.documentfile:documentfile:1.1.0` |
-| macOS entitlements | `files.user-selected.read-write` |
+| macOS entitlements | `files.user-selected.read-write`, `network.client` |
 
 ---
 
@@ -192,12 +255,12 @@ Background `DocumentFile` scan → `compute()` + `deepCastMap` → `TreeRenderer
 | Area | Files |
 |------|-------|
 | Entry | `lib/main.dart` |
-| Screens | `lib/screens/home_screen.dart`, `library_screen.dart`, `tree_view_screen.dart` |
-| Scan | `lib/services/directory_scanner.dart`, `android_tree_scanner.dart`, `MainActivity.kt` |
+| Screens | `lib/screens/home_screen.dart`, `library_screen.dart`, `tree_view_screen.dart`, `settings_screen.dart`, `remote_directory_picker_screen.dart` |
+| Scan | `directory_scanner.dart`, `android_tree_scanner.dart`, `smb_directory_scanner.dart`, `sftp_directory_scanner.dart`, `smb_remote_browser.dart`, `sftp_remote_browser.dart`, `remote_settings_service.dart`, `scan_counters.dart`, `MainActivity.kt` |
 | Storage / export | `tree_storage_service.dart`, `tree_export_service.dart` |
 | Tree UI | `lib/widgets/collapsible_tree_view.dart`, `tree_text_view.dart`, `scan_loading_overlay.dart` |
 | Utils | `lib/utils/tree_renderer.dart`, `map_cast.dart` |
-| Models | `tree_node.dart`, `tree_build.dart`, `scan_progress.dart` |
+| Models | `tree_node.dart`, `tree_build.dart`, `scan_progress.dart`, `scan_source_type.dart`, `remote_settings.dart` |
 | Tests | `directory_scanner_test.dart`, `map_cast_test.dart`, `tree_renderer_test.dart`, `widget_test.dart` |
 
 ---
@@ -205,6 +268,8 @@ Background `DocumentFile` scan → `compute()` + `deepCastMap` → `TreeRenderer
 ## Known constraints / pitfalls
 
 - **Android `rootPath`** — `content://` URI only; not for `dart:io`.
+- **Remote credentials** — stored in app settings file locally; not included in tree library JSON exports.
+- **SMB path** — must include share as first path segment (e.g. `/videos/games`).
 - **Platform channel maps** — use `deepCastMap` before `fromJson`.
 - **Mobile export** — `bytes` required on `saveFile` (BJ-007).
 - **Depth limit** — leaf folders hide nested files (BJ-006).
