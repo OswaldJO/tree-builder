@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../models/library_sort_option.dart';
 import '../models/tree_build.dart';
 import '../services/tree_export_service.dart';
 import '../services/tree_storage_service.dart';
@@ -18,6 +19,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _exportService = TreeExportService();
   List<TreeBuild> _builds = [];
   bool _loading = true;
+  LibrarySortOption _sortOption = LibrarySortOption.newest;
 
   @override
   void initState() {
@@ -90,14 +92,71 @@ class _LibraryScreenState extends State<LibraryScreen> {
     await _load();
   }
 
+  Future<void> _toggleFavorite(TreeBuild build) async {
+    await _storage.save(build.copyWith(isFavorite: !build.isFavorite));
+    await _load();
+  }
+
+  List<_LibraryRow> _buildRows() {
+    final favorites = sortTreeBuilds(
+      _builds.where((b) => b.isFavorite).toList(),
+      _sortOption,
+    );
+    final others = sortTreeBuilds(
+      _builds.where((b) => !b.isFavorite).toList(),
+      _sortOption,
+    );
+
+    final rows = <_LibraryRow>[];
+    if (favorites.isNotEmpty) {
+      rows.add(const _LibraryRow.header('Favorites'));
+      rows.addAll(favorites.map(_LibraryRow.build));
+    }
+    if (others.isNotEmpty) {
+      if (favorites.isNotEmpty) {
+        rows.add(const _LibraryRow.header('All trees'));
+      }
+      rows.addAll(others.map(_LibraryRow.build));
+    }
+    return rows;
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat.yMMMd().add_jm();
+    final rows = _buildRows();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tree Library'),
         actions: [
+          PopupMenuButton<LibrarySortOption>(
+            tooltip: 'Sort',
+            icon: const Icon(Icons.sort),
+            initialValue: _sortOption,
+            onSelected: (option) => setState(() => _sortOption = option),
+            itemBuilder: (context) => LibrarySortOption.values
+                .map(
+                  (option) => PopupMenuItem(
+                    value: option,
+                    child: Row(
+                      children: [
+                        if (option == _sortOption)
+                          Icon(
+                            Icons.check,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary,
+                          )
+                        else
+                          const SizedBox(width: 18),
+                        const SizedBox(width: 8),
+                        Text(option.label),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
           IconButton(
             tooltip: 'Import',
             icon: const Icon(Icons.upload_file),
@@ -118,16 +177,43 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   onRefresh: _load,
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _builds.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemCount: rows.length,
+                    separatorBuilder: (context, index) {
+                      final next = index + 1 < rows.length ? rows[index + 1] : null;
+                      if (rows[index].isHeader || (next?.isHeader ?? false)) {
+                        return const SizedBox(height: 4);
+                      }
+                      return const SizedBox(height: 8);
+                    },
                     itemBuilder: (context, index) {
-                      final build = _builds[index];
+                      final row = rows[index];
+                      if (row.isHeader) {
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                            left: 4,
+                            top: 8,
+                            bottom: 4,
+                          ),
+                          child: Text(
+                            row.title!,
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        );
+                      }
+
+                      final build = row.build!;
                       return Card(
                         child: ListTile(
                           leading: CircleAvatar(
                             child: Icon(
                               Icons.folder,
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
                             ),
                           ),
                           title: Text(build.rootName),
@@ -135,7 +221,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             '${dateFormat.format(build.createdAt)} · '
                             '${build.folderCount} folders · ${build.fileCount} files',
                           ),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  build.isFavorite
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: build.isFavorite
+                                      ? Theme.of(context).colorScheme.error
+                                      : null,
+                                ),
+                                tooltip: build.isFavorite
+                                    ? 'Remove from favorites'
+                                    : 'Add to favorites',
+                                onPressed: () => _toggleFavorite(build),
+                              ),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
                           onTap: () async {
                             await Navigator.push(
                               context,
@@ -155,6 +260,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
     );
   }
+}
+
+class _LibraryRow {
+  const _LibraryRow.header(this.title) : build = null;
+
+  const _LibraryRow.build(this.build) : title = null;
+
+  final String? title;
+  final TreeBuild? build;
+
+  bool get isHeader => title != null;
 }
 
 class _EmptyLibrary extends StatelessWidget {

@@ -1,4 +1,4 @@
-package com.treebuilder.tree_builder
+package com.funnybearapps.datatreebuilder
 
 import android.app.Activity
 import android.content.Intent

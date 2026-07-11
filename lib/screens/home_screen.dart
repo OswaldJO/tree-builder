@@ -304,18 +304,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 SegmentedButton<ScanSourceType>(
+                                  showSelectedIcon: false,
                                   segments: ScanSourceType.values
                                       .map(
                                         (source) => ButtonSegment(
                                           value: source,
                                           label: Text(source.label),
-                                          icon: Icon(
-                                            source == ScanSourceType.local
-                                                ? Icons.folder_outlined
-                                                : source == ScanSourceType.smb
-                                                    ? Icons.lan_outlined
-                                                    : Icons.cloud_outlined,
-                                          ),
                                         ),
                                       )
                                       .toList(),

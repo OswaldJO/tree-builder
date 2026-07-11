@@ -23,8 +23,7 @@ class TreeStorageService {
     final decoded = jsonDecode(contents) as List<dynamic>;
     return decoded
         .map((item) => TreeBuild.fromJson(item as Map<String, dynamic>))
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        .toList();
   }
 
   Future<void> save(TreeBuild build) async {
@@ -55,7 +54,6 @@ class TreeStorageService {
       }
     }
 
-    builds.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     await _persist(builds);
   }
 

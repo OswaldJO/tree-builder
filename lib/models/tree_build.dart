@@ -12,6 +12,7 @@ class TreeBuild {
     this.maxDepth,
     this.expandAllFolders = false,
     this.scanSourceType = ScanSourceType.local,
+    this.isFavorite = false,
   });
 
   final String id;
@@ -23,6 +24,7 @@ class TreeBuild {
   final int? maxDepth;
   final bool expandAllFolders;
   final ScanSourceType scanSourceType;
+  final bool isFavorite;
 
   int get fileCount => root.fileCount;
   int get folderCount => root.folderCount;
@@ -37,6 +39,7 @@ class TreeBuild {
     int? maxDepth,
     bool? expandAllFolders,
     ScanSourceType? scanSourceType,
+    bool? isFavorite,
   }) {
     return TreeBuild(
       id: id ?? this.id,
@@ -48,6 +51,7 @@ class TreeBuild {
       maxDepth: maxDepth ?? this.maxDepth,
       expandAllFolders: expandAllFolders ?? this.expandAllFolders,
       scanSourceType: scanSourceType ?? this.scanSourceType,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -62,6 +66,7 @@ class TreeBuild {
         if (expandAllFolders) 'expandAllFolders': expandAllFolders,
         if (scanSourceType != ScanSourceType.local)
           'scanSourceType': scanSourceType.name,
+        if (isFavorite) 'isFavorite': isFavorite,
       };
 
   factory TreeBuild.fromJson(Map<String, dynamic> json) {
@@ -75,6 +80,7 @@ class TreeBuild {
       maxDepth: json['maxDepth'] as int?,
       expandAllFolders: json['expandAllFolders'] as bool? ?? false,
       scanSourceType: _parseScanSourceType(json['scanSourceType'] as String?),
+      isFavorite: json['isFavorite'] as bool? ?? false,
     );
   }
 

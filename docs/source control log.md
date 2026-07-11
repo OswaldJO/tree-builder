@@ -36,6 +36,18 @@ current release: 1
 
 - **Settings + remote directory picker (Jun 11 2026):** Gear icon in app bar opens **Settings** for SMB/SFTP credentials (saved to `remote_settings.json`). **Choose Directory** is unified for all sources; SMB/SFTP browse shares/folders in a picker before scanning the selected folder only. **Action:** Hot restart; configure remote connections in Settings first.
 
+- **Library — sort & favorites (Jun 11 2026):** Sort menu (A→Z, Z→A, newest, oldest). Heart trees to pin them in a **Favorites** section at the top; `isFavorite` on `TreeBuild`. **Action:** Hot restart.
+
+- **iOS & Android build fixes (Jul 8 2026):** Disabled Swift Package Manager (CocoaPods only). iOS `platform :ios, '13.0'`, `pod install`, `NSLocalNetworkUsageDescription` for SMB/SFTP. Verified `flutter build apk --debug` and `flutter build ios --simulator`. **Action:** Free disk space if builds fail with “No space left on device”; run `flutter clean` then `cd ios && pod install`.
+
+- **App icon (Jul 9 2026):** Custom “Data Tree Builder” artwork as launcher icon on iOS and Android via `flutter_launcher_icons` (`assets/app_icon.png`). **Action:** Full restart to see new icon on device/simulator.
+
+- **Theme — force dark mode (Jul 9 2026):** App always uses `darkTheme` (`themeMode: ThemeMode.dark`). iOS simulator was showing pale light theme when system appearance was light; Android used dark when system was dark. **Action:** Hot restart.
+
+- **Bundle ID (Jul 10 2026):** Changed app ID to `com.funnybearapps.datatreebuilder` (iOS, Android, macOS, Linux). **Action:** Uninstall old app before reinstalling; full rebuild.
+
+- **iOS Info.plist — photo library purpose string (Jul 10 2026):** Added `NSPhotoLibraryUsageDescription` to fix App Store ITMS-90683 (`file_picker` / DKImagePickerController references photo library APIs). **Action:** Rebuild and resubmit.
+
 ## Focus for next release
 
 - Confirm export/import round-trip on Android after BJ-007 fix.

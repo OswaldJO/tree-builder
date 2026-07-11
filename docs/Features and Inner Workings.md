@@ -8,9 +8,10 @@ For a short, commit-adjacent summary of recent changes, see `source control log.
 ## Product shape
 
 - **Stack:** Flutter (Material 3), Dart 3.8+.
+- **Theme:** Dark mode only (`themeMode: ThemeMode.dark`, green seed `#66BB6A`).
 - **Persistence:** Single JSON file `tree_library.json` in app documents directory (`TreeStorageService`).
 - **Navigation:** Home screen + pushed routes for **Library** and **Tree detail**.
-- **Platforms:** Android (SAF-native scan), macOS/desktop/iOS (`file_picker` + `dart:io` scan), plus **SMB** and **SFTP** remote scan on all platforms.
+- **Platforms:** Android (SAF-native scan), iOS (`file_picker` + `dart:io` scan), macOS/desktop (`file_picker` + `dart:io` scan), plus **SMB** and **SFTP** remote scan on all platforms.
 
 | Concern | Package / mechanism |
 |---------|---------------------|
@@ -19,6 +20,7 @@ For a short, commit-adjacent summary of recent changes, see `source control log.
 | Remote scan (SMB) | `smb_connect` — `SmbDirectoryScanner` |
 | Remote scan (SFTP) | `dartssh2` — `SftpDirectoryScanner` |
 | Local library | `path_provider` + JSON file |
+| App icon | `assets/app_icon.png` → `flutter_launcher_icons` (iOS + Android) |
 | Export / import | `file_picker` save/open dialogs (platform-specific bytes vs path) |
 | Tree rendering | `TreeRenderer` + `CollapsibleTreeView` |
 
@@ -73,7 +75,9 @@ Remote credentials live in **Settings** (gear icon in app bar). Passwords are st
 
 **File:** `lib/screens/library_screen.dart`
 
-- Lists `TreeBuild` entries (newest first): name, date, folder/file counts.
+- Lists `TreeBuild` entries: name, date, folder/file counts.
+- **Sort** menu (app bar): A→Z, Z→A, newest first, oldest first (`LibrarySortOption`).
+- **Favorites:** heart icon on each row; favorited trees appear under a **Favorites** header at the top, then **All trees** for the rest.
 - **Import** / **Export all** (JSON).
 - Tap → tree detail; delete from detail screen.
 
@@ -226,6 +230,7 @@ Shared progress helper: `lib/services/scan_counters.dart`.
 | `maxDepth` | int? | Scan depth limit; omitted if unlimited |
 | `expandAllFolders` | bool | Default `false`; initial UI expansion |
 | `scanSourceType` | enum | `local` (default), `smb`, or `sftp` |
+| `isFavorite` | bool | Default `false`; hearted in library → **Favorites** section |
 
 ### `ScanProgress` — `lib/models/scan_progress.dart`
 
@@ -243,10 +248,28 @@ Shared progress helper: `lib/services/scan_counters.dart`.
 
 | Item | Location |
 |------|----------|
+| Application ID | `com.funnybearapps.datatreebuilder` |
 | NDK | `27.0.12077973` in `android/app/build.gradle.kts` |
 | INTERNET permission | `android/app/src/main/AndroidManifest.xml` (SMB/SFTP) |
 | DocumentFile | `androidx.documentfile:documentfile:1.1.0` |
-| macOS entitlements | `files.user-selected.read-write`, `network.client` |
+
+## iOS configuration
+
+| Item | Location |
+|------|----------|
+| Bundle ID | `com.funnybearapps.datatreebuilder` |
+| Minimum iOS | 13.0 (`ios/Podfile`, `IPHONEOS_DEPLOYMENT_TARGET`) |
+| CocoaPods | `ios/Podfile`; run `pod install` after `flutter pub get` |
+| Swift Package Manager | Disabled in `pubspec.yaml` (`enable-swift-package-manager: false`) |
+| Local network | `NSLocalNetworkUsageDescription` in `ios/Runner/Info.plist` (SMB/SFTP to LAN) |
+| Photo library | `NSPhotoLibraryUsageDescription` in `ios/Runner/Info.plist` (required by `file_picker` / DKImagePickerController) |
+| Directory pick | `file_picker` + `dart:io` scan (no SAF; Android-only SAF path) |
+
+## macOS configuration
+
+| Item | Location |
+|------|----------|
+| Entitlements | `files.user-selected.read-write`, `network.client` |
 
 ---
 
@@ -260,8 +283,8 @@ Shared progress helper: `lib/services/scan_counters.dart`.
 | Storage / export | `tree_storage_service.dart`, `tree_export_service.dart` |
 | Tree UI | `lib/widgets/collapsible_tree_view.dart`, `tree_text_view.dart`, `scan_loading_overlay.dart` |
 | Utils | `lib/utils/tree_renderer.dart`, `map_cast.dart` |
-| Models | `tree_node.dart`, `tree_build.dart`, `scan_progress.dart`, `scan_source_type.dart`, `remote_settings.dart` |
-| Tests | `directory_scanner_test.dart`, `map_cast_test.dart`, `tree_renderer_test.dart`, `widget_test.dart` |
+| Models | `tree_node.dart`, `tree_build.dart`, `scan_progress.dart`, `scan_source_type.dart`, `remote_settings.dart`, `library_sort_option.dart` |
+| Tests | `directory_scanner_test.dart`, `map_cast_test.dart`, `tree_renderer_test.dart`, `library_sort_test.dart`, `widget_test.dart` |
 
 ---
 
