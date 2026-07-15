@@ -1,4 +1,4 @@
-package com.funnybearapps.datatreebuilder
+package com.funnybearapps.directorytreebuilder
 
 import android.app.Activity
 import android.content.Intent

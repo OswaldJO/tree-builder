@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Tree Builder</string>
+	<string>Directory Tree Builder</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>tree_builder</string>
+	<string>Directory Tree Builder</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,9 +29,9 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Tree Builder connects to SMB and SFTP servers on your local network to scan remote folders.</string>
+	<string>Directory Tree Builder connects to SMB and SFTP servers on your local network to scan remote folders.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Tree Builder may access your photo library when you import or export tree files using the system file picker.</string>
+	<string>Directory Tree Builder may access your photo library when you import or export tree files using the system file picker.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

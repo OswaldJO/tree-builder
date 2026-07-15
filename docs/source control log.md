@@ -48,6 +48,10 @@ current release: 1
 
 - **iOS Info.plist — photo library purpose string (Jul 10 2026):** Added `NSPhotoLibraryUsageDescription` to fix App Store ITMS-90683 (`file_picker` / DKImagePickerController references photo library APIs). **Action:** Rebuild and resubmit.
 
+- **Pod sync script (Jul 15 2026):** Added `scripts/sync_pods.sh` (`flutter pub get` + `pod install`) for CocoaPods sandbox / Podfile.lock mismatches after `flutter clean`. Command noted under `version` in `pubspec.yaml`. **Action:** `./scripts/sync_pods.sh` then open `ios/Runner.xcworkspace`.
+
+- **Rename — Directory Tree Builder (Jul 15 2026):** Display name → **Directory Tree Builder**; bundle/app ID → `com.funnybearapps.directorytreebuilder` (iOS, Android, macOS, Linux). **Action:** Uninstall old app; full rebuild; App Store Connect may need the new bundle ID if creating a new app listing.
+
 ## Focus for next release
 
 - Confirm export/import round-trip on Android after BJ-007 fix.

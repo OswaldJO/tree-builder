@@ -252,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tree Builder'),
+        title: const Text('Directory Tree Builder'),
         actions: [
           IconButton(
             tooltip: 'Settings',

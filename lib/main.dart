@@ -12,7 +12,7 @@ class TreeBuilderApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Tree Builder',
+      title: 'Directory Tree Builder',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

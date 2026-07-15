@@ -248,7 +248,7 @@ Shared progress helper: `lib/services/scan_counters.dart`.
 
 | Item | Location |
 |------|----------|
-| Application ID | `com.funnybearapps.datatreebuilder` |
+| Application ID | `com.funnybearapps.directorytreebuilder` |
 | NDK | `27.0.12077973` in `android/app/build.gradle.kts` |
 | INTERNET permission | `android/app/src/main/AndroidManifest.xml` (SMB/SFTP) |
 | DocumentFile | `androidx.documentfile:documentfile:1.1.0` |
@@ -257,7 +257,7 @@ Shared progress helper: `lib/services/scan_counters.dart`.
 
 | Item | Location |
 |------|----------|
-| Bundle ID | `com.funnybearapps.datatreebuilder` |
+| Bundle ID | `com.funnybearapps.directorytreebuilder` |
 | Minimum iOS | 13.0 (`ios/Podfile`, `IPHONEOS_DEPLOYMENT_TARGET`) |
 | CocoaPods | `ios/Podfile`; run `pod install` after `flutter pub get` |
 | Swift Package Manager | Disabled in `pubspec.yaml` (`enable-swift-package-manager: false`) |

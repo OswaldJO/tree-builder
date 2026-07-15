@@ -1,11 +1,11 @@
 {
-    "name": "tree_builder",
-    "short_name": "tree_builder",
+    "name": "Directory Tree Builder",
+    "short_name": "Dir Tree",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Generate, save, and export directory tree structures.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
