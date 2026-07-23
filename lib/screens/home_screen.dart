@@ -174,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<TreeBuild?> _scanLocal(int? maxDepth) async {
-    if (Platform.isAndroid) {
+    if (Platform.isAndroid || Platform.isIOS) {
       return _scanner.pickAndScan(
         maxDepth: maxDepth,
         onProgress: (progress) {

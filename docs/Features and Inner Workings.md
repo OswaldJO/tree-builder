@@ -1,73 +1,78 @@
-# Tree Builder — Features and Inner Workings
+# Directory Tree Builder — Features and Inner Workings
 
-This document describes **how the app behaves today** and **where implementation lives**.
-For a short, commit-adjacent summary of recent changes, see `source control log.md`.
+This is the **living product and architecture handbook**. It describes **what the app does today** and **where that lives in code** — not a changelog, not a setup tutorial.
+
+**Before digging through the repo**, start here. Use it for orientation (UI → files), intended behavior, and edge cases.
+
+| Other docs | Role |
+|------------|------|
+| [`source control log.md`](source%20control%20log.md) | What changed recently (commit-adjacent) |
+| [`bug journal.md`](bug%20journal.md) | What broke and how it was fixed |
+| `pubspec.yaml` / `scripts/sync_pods.sh` | Version + CocoaPods sync after `flutter clean` |
 
 ---
 
 ## Product shape
 
-- **Stack:** Flutter (Material 3), Dart 3.8+.
-- **Theme:** Dark mode only (`themeMode: ThemeMode.dark`, green seed `#66BB6A`).
-- **Persistence:** Single JSON file `tree_library.json` in app documents directory (`TreeStorageService`).
-- **Navigation:** Home screen + pushed routes for **Library** and **Tree detail**.
-- **Platforms:** Android (SAF-native scan), iOS (`file_picker` + `dart:io` scan), macOS/desktop (`file_picker` + `dart:io` scan), plus **SMB** and **SFTP** remote scan on all platforms.
+| Concern | Today |
+|---------|--------|
+| **Package / version** | `tree_builder` / `1.0.2` (`pubspec.yaml`) |
+| **Display name** | Directory Tree Builder |
+| **App ID** | `com.funnybearapps.directorytreebuilder` (iOS, Android, macOS, Linux) |
+| **Stack** | Flutter Material 3, Dart `^3.8.1` |
+| **Theme** | Dark only (`themeMode: ThemeMode.dark`, green seed `#66BB6A`) |
+| **Shell** | Single home screen; other areas via `Navigator.push` (no router package) |
+| **Persistence** | App documents: `tree_library.json`, `remote_settings.json` |
+
+**Entry:** `lib/main.dart` → `TreeBuilderApp` → `HomeScreen`.
+
+**Pushed screens:** Settings, Library, Tree detail, Remote directory picker.
 
 | Concern | Package / mechanism |
 |---------|---------------------|
-| Directory pick (desktop) | `file_picker` `getDirectoryPath()` |
-| Directory pick + scan (Android) | Custom `MethodChannel` + `EventChannel` in `MainActivity.kt` |
-| Remote scan (SMB) | `smb_connect` — `SmbDirectoryScanner` |
-| Remote scan (SFTP) | `dartssh2` — `SftpDirectoryScanner` |
-| Local library | `path_provider` + JSON file |
-| App icon | `assets/app_icon.png` → `flutter_launcher_icons` (iOS + Android) |
-| Export / import | `file_picker` save/open dialogs (platform-specific bytes vs path) |
+| Local pick (desktop / iOS) | Desktop: `file_picker`. **iOS:** native `UIDocumentPicker` + security-scoped scan (`IosTreeScanner`) |
+| Local pick + scan (Android) | SAF via `MethodChannel` / `EventChannel` in `MainActivity.kt` |
+| Remote SMB | `smb_connect` — browse + scan |
+| Remote SFTP | `dartssh2` — browse + scan |
+| Library / settings files | `path_provider` + JSON |
+| Export / import | `file_picker` save/open (bytes on mobile) |
+| App icon | `assets/app_icon.png` → `flutter_launcher_icons` |
 | Tree rendering | `TreeRenderer` + `CollapsibleTreeView` |
 
 ---
 
-## Home screen
+## Home
 
 **File:** `lib/screens/home_screen.dart`
 
-### Choose directory source
+### Source selector + Choose Directory
 
-Home screen **segmented control**: **Local** | **SMB** | **SFTP**.
+Segmented control: **Local** | **SMB** | **SFTP**. One primary button: **Choose Directory**.
 
 | Source | Flow |
 |--------|------|
-| **Local** | System folder picker (Android SAF or `file_picker`) |
-| **SMB** | Settings credentials → browse shares/folders → scan selected folder |
-| **SFTP** | Settings credentials → browse remote folders → scan selected folder |
+| **Local (Android)** | SAF folder pick → native `DocumentFile` scan → Dart isolate parse |
+| **Local (iOS)** | Native folder picker with security-scoped access → FileManager scan (required for iCloud Drive) |
+| **SMB / SFTP** | Load Settings credentials → remote folder browser → scan **selected path only** |
 
-Remote credentials live in **Settings** (gear icon in app bar). Passwords are stored locally in `remote_settings.json` on the device — not in tree library exports.
+If SMB/SFTP is selected without host+username configured → snackbar with **Settings** action; scan does not start.
 
-### Choose Directory
+After a successful scan: auto-save to library → show preview (`CollapsibleTreeView`) → **Open** opens tree detail.
 
-1. User selects source and taps **Choose Directory**.
-2. **Local — Android:** `DirectoryScanner.pickAndScan()` → SAF pick → background scan.
-3. **Local — other:** `getDirectoryPath()` → `_scanWithIo()`.
-4. **SMB/SFTP:** load settings → `RemoteDirectoryPickerScreen` → scan only the selected path.
-5. Result saved to library; collapsible preview shown; **Open** → tree detail.
-
-**Files:** `lib/screens/settings_screen.dart`, `lib/screens/remote_directory_picker_screen.dart`, `lib/services/remote_settings_service.dart`, `lib/services/smb_remote_browser.dart`, `lib/services/sftp_remote_browser.dart`
-
-### Scan options (checkboxes, top to bottom)
+### Scan options
 
 | Option | Default | Effect |
 |--------|---------|--------|
-| **Expand all folders** | Off | When on, tree opens fully expanded; stored as `TreeBuild.expandAllFolders` |
-| **Limit folder depth** | Off | When on, integer **Depth levels** field (min 1) caps folder recursion (`maxDepth`) |
+| **Expand all folders** | Off | Initial UI expansion; stored as `TreeBuild.expandAllFolders` |
+| **Limit folder depth** | Off | Caps folder recursion (`maxDepth`); field min 1 when enabled |
 
 ### Scanning UX
 
-`ScanLoadingOverlay` during scan: phases **Scanning** → **Building tree** → **Saving**; live folder/file counts.
+`ScanLoadingOverlay` while scanning: phases **Scanning** → **Building tree** → **Saving**; live folder/file counts (progress every ~25 entries).
 
-**Key types:** `lib/widgets/scan_loading_overlay.dart`, `lib/models/scan_progress.dart`
+**Key types:** `ScanSourceType`, `ScanProgress`, `DirectoryScanner`, `SmbDirectoryScanner`, `SftpDirectoryScanner`, `TreeStorageService`, `RemoteSettingsService`
 
-### Tree preview
-
-`CollapsibleTreeView` in `Expanded` below controls — same interactive tree as detail view.
+**Key widgets:** `lib/widgets/scan_loading_overlay.dart`
 
 ---
 
@@ -75,11 +80,14 @@ Remote credentials live in **Settings** (gear icon in app bar). Passwords are st
 
 **File:** `lib/screens/library_screen.dart`
 
-- Lists `TreeBuild` entries: name, date, folder/file counts.
-- **Sort** menu (app bar): A→Z, Z→A, newest first, oldest first (`LibrarySortOption`).
-- **Favorites:** heart icon on each row; favorited trees appear under a **Favorites** header at the top, then **All trees** for the rest.
-- **Import** / **Export all** (JSON).
-- Tap → tree detail; delete from detail screen.
+- Lists saved `TreeBuild`s: name, date, folder/file counts.
+- **Sort** (app bar, session-only, default newest): A→Z, Z→A, newest first, oldest first.
+- **Favorites:** heart on each row; favorited trees under **Favorites** at top, then **All trees**. Sort applies within each section.
+- **Import** / **Export all** (JSON library file).
+- Tap → tree detail (with delete). Pull-to-refresh.
+- `scanSourceType` is stored on builds but **not** shown as a badge in the list UI.
+
+**Key types:** `LibrarySortOption`, `sortTreeBuilds()`, `TreeExportService`, `TreeStorageService`
 
 ---
 
@@ -87,23 +95,34 @@ Remote credentials live in **Settings** (gear icon in app bar). Passwords are st
 
 **File:** `lib/screens/settings_screen.dart`
 
-- App bar gear icon on home screen.
-- **SMB:** host, domain (optional), username, password.
-- **SFTP:** host, port, username, password.
-- Persisted via `RemoteSettingsService` → `{appDocuments}/remote_settings.json`.
+Credentials for remote scan (not entered on Home):
+
+| Protocol | Fields |
+|----------|--------|
+| **SMB** | Host, domain (optional), username, password |
+| **SFTP** | Host, port (default 22), username, password |
+
+Saved via **Save** to `{appDocuments}/remote_settings.json`. Passwords are **plaintext on device** and are **not** included in tree library exports. `isConfigured` = non-empty host + username.
+
+**Key types:** `RemoteSettings`, `SmbSettings`, `SftpSettings`, `RemoteSettingsService`
 
 ---
 
 ## Remote directory picker
 
-**File:** `lib/screens/remote_directory_picker_screen.dart`
+**File:** `lib/screens/remote_directory_picker_screen.dart`  
+Helper: `pickRemoteDirectory(...)`
+
+Opens after Choose Directory when source is SMB or SFTP.
 
 | Protocol | Browse behavior |
 |----------|-----------------|
-| **SMB** | Lists shares at root, then subfolders; **Select this folder** enabled inside a share |
-| **SFTP** | Starts at `/`; navigate into subfolders; select any folder including root |
+| **SMB** | Share list at root (not selectable); open a share, then subfolders; **Select this folder** once inside a share. Hides IPC and shares ending in `$`. |
+| **SFTP** | Starts at `/`; any folder (including `/`) can be selected; Up disabled at root |
 
-Browsers: `SmbRemoteBrowser`, `SftpRemoteBrowser`. Connection closed when picker is dismissed.
+Connection closed when the picker is dismissed.
+
+**Key types:** `SmbRemoteBrowser`, `SftpRemoteBrowser`, `RemoteDirectoryEntry`, `RemotePath`
 
 ---
 
@@ -111,10 +130,11 @@ Browsers: `SmbRemoteBrowser`, `SftpRemoteBrowser`. Connection closed when picker
 
 **File:** `lib/screens/tree_view_screen.dart`
 
-- Info card: path, folder/file counts.
-- `CollapsibleTreeView` — tap folders to expand/collapse.
-- App bar: **Expand all**, **Collapse all**, **Copy visible tree**, export menu (JSON/text), delete.
-- Hint: copy and text export use visible tree only.
+- Info: `rootPath`, folder/file counts.
+- Interactive `CollapsibleTreeView`.
+- App bar: **Expand all**, **Collapse all**, **Copy visible tree**, export JSON/text, delete (when opened from Library).
+- Copy and text/JSON `treeText` use the **currently visible** (expanded/collapsed) ASCII. Full `root` structure is still in JSON for re-import.
+- Manual expand/collapse is **in-memory only** until a new save; only `expandAllFolders` from scan is persisted.
 
 ---
 
@@ -124,68 +144,82 @@ Browsers: `SmbRemoteBrowser`, `SftpRemoteBrowser`. Connection closed when picker
 
 ### Interaction
 
-- Folders with children show chevron (`keyboard_arrow_right` / `keyboard_arrow_down`); tap toggles.
-- Files and empty folders: no chevron, not tappable.
-- Path keys: `folder/subfolder` (slash-separated from root children).
+- Folders **with children** show a chevron; tap toggles expand/collapse.
+- Files and empty folders: no chevron.
+- Path keys: slash-separated from root children (`folder/subfolder`).
 
-### Expansion state
+### Expansion
 
 | Source | Initial state |
 |--------|----------------|
-| `expandAllFolders: false` (default) | All folders collapsed — only root-level entries visible |
-| `expandAllFolders: true` | All folder paths in `TreeRenderer.allFolderPaths(root)` expanded |
-| User taps / app bar buttons | Updates in-memory only (not persisted until re-save) |
+| `expandAllFolders: false` | Collapsed (top-level entries only) |
+| `expandAllFolders: true` | All folder paths expanded |
+| User / app bar | In-memory only |
 
 ### Text rendering
 
-- `TreeRenderer.renderFull()` — all folders expanded (used when building `treeText` at scan time).
-- `TreeRenderer.renderVisible(rootName, children, expandedPaths)` — ASCII for current view.
-- `CollapsibleTreeViewState.visibleTreeText` — used for copy and export.
+- `TreeRenderer.renderFull` — full ASCII at scan time → `TreeBuild.treeText`
+- `TreeRenderer.renderVisible` — ASCII for current expansion
+- `CollapsibleTreeViewState.visibleTreeText` — copy / export
 
 ---
 
 ## Directory scanning
 
-**Entry point:** `DirectoryScanner.pickAndScan({maxDepth, path, onProgress})`
+### Local — Android (SAF)
 
-### Desktop / macOS / iOS (`dart:io`)
-
-**File:** `lib/services/directory_scanner.dart`
-
-- Non-directory entities → files; sort dirs first, then alpha.
-- Progress every 25 entries.
-- `treeText` = `TreeRenderer.renderFull(rootName, children)`.
-
-### Android (SAF)
-
-**Files:** `MainActivity.kt`, `lib/services/android_tree_scanner.dart`
+**Files:** `lib/services/android_tree_scanner.dart`, `android/.../MainActivity.kt`
 
 | Channel | Purpose |
 |---------|---------|
 | `com.treebuilder/tree_scanner` | `pickDirectory`, `scanDirectory` |
 | `com.treebuilder/scan_progress` | `{folders, files, current}` |
 
-Background `DocumentFile` scan → `compute()` + `deepCastMap` → `TreeRenderer.renderFull`.
+`ACTION_OPEN_DOCUMENT_TREE` → background `DocumentFile` walk → Dart `compute()` + `deepCastMap` → `DirectoryScanner.fromScanResult`.
 
-### SMB (Samba/CIFS)
+`rootPath` is a **`content://` URI** — not usable with `dart:io`.
 
-**File:** `lib/services/smb_directory_scanner.dart`
+### Local — iOS (security-scoped document picker)
 
-- Connect via `SmbConnect.connectAuth(host, username, password, domain)`.
-- Path format: `/share/folder/subfolder` — first segment is the SMB share name.
-- `listFiles()` recursion with same depth limit and progress reporting as local scan.
-- `rootPath` stored as `smb://host/share/path` (no credentials).
+**Files:** `lib/services/ios_tree_scanner.dart`, `ios/Runner/AppDelegate.swift`
+
+| Channel | Purpose |
+|---------|---------|
+| `com.treebuilder/tree_scanner` | `pickDirectory`, `scanDirectory` (same names as Android) |
+| `com.treebuilder/scan_progress` | `{folders, files, current}` |
+
+`UIDocumentPicker` for folders → `startAccessingSecurityScopedResource` → FileManager walk → Dart `compute()` parse. Required for **iCloud Drive** paths under `Mobile Documents/com~apple~CloudDocs/…`.
+
+### Local — desktop (`dart:io`)
+
+**File:** `lib/services/directory_scanner.dart`
+
+- `FilePicker.getDirectoryPath` then `_scanWithIo`.
+- `list(followLinks: false)`; non-directories treated as files.
+- Sort: directories first, then case-insensitive name.
+- Permission errors → placeholder node `[permission denied: …]`.
+
+### SMB
+
+**Files:** `lib/services/smb_directory_scanner.dart`, `smb_remote_browser.dart`
+
+- Auth: `SmbConnect.connectAuth(host, username, password, domain)`.
+- Path: `/share/folder/...` (first segment = share name).
+- `rootPath` stored as `smb://host/path` (no credentials).
+- List/scan errors under a folder → `[error: …]` child node.
 
 ### SFTP
 
-**File:** `lib/services/sftp_directory_scanner.dart`
+**Files:** `lib/services/sftp_directory_scanner.dart`, `sftp_remote_browser.dart`
 
-- Connect via `SSHSocket` + `SSHClient` + `client.sftp()`.
-- Password auth via `onPasswordRequest`.
-- `listdir()` recursion; dirs first, then alpha.
+- `SSHSocket` + `SSHClient` + `sftp()`; password via `onPasswordRequest`.
 - `rootPath` stored as `sftp://host[:port]/path`.
 
-Shared progress helper: `lib/services/scan_counters.dart`.
+### Shared scan rules
+
+- Progress helper: `lib/services/scan_counters.dart` (report every 25 items, yield to UI).
+- When `currentDepth >= maxDepth`, directory children are empty — **nested files under that leaf are omitted**.
+- Skip `.` / `..` on remote listings.
 
 ---
 
@@ -195,15 +229,19 @@ Shared progress helper: `lib/services/scan_counters.dart`.
 
 | Format | Visible tree? | Notes |
 |--------|---------------|-------|
-| Text export | Yes | `treeText` param = `visibleTreeText` |
-| JSON export (single) | `treeText` only | Full `root` still included for re-import |
-| JSON export (library) | Full builds | No collapse filter |
-| Copy clipboard | Yes | From detail screen |
+| Text export | Yes | Uses `visibleTreeText` when provided |
+| JSON (single) | `treeText` field may be visible ASCII | Full `root` still present for re-import |
+| JSON (library) | Full builds as stored | Array of `TreeBuild` |
+| Copy clipboard | Yes | From detail |
 
 | Platform | Export | Import |
 |----------|--------|--------|
 | Android / iOS | `saveFile(bytes: utf8)` | `pickFiles(withData: true)` |
-| Desktop | `saveFile` → `File.writeAsBytes` | `File(path).readAsString` |
+| Desktop | Write path from `saveFile` | Read file path |
+
+**Storage:** `lib/services/tree_storage_service.dart` — `{documents}/tree_library.json`.  
+`save`: update by id or insert at index 0.  
+`importBuilds`: skip duplicate ids.
 
 ---
 
@@ -211,65 +249,74 @@ Shared progress helper: `lib/services/scan_counters.dart`.
 
 ### `TreeNode` — `lib/models/tree_node.dart`
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `name` | String | File or folder name |
-| `isDirectory` | bool | |
-| `children` | List\<TreeNode\> | Empty for files |
+| Field | Notes |
+|-------|--------|
+| `name` | File or folder name |
+| `isDirectory` | |
+| `children` | Empty for files |
+| `fileCount` | Files only |
+| `folderCount` | **Includes this directory** + descendants |
 
 ### `TreeBuild` — `lib/models/tree_build.dart`
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | String | UUID v4 |
-| `rootPath` | String | Local path, Android `content://` URI, or remote display URI (`smb://…`, `sftp://…`) |
-| `rootName` | String | Display name |
-| `root` | TreeNode | Full tree (always complete) |
-| `treeText` | String | Full ASCII at scan time (`renderFull`) |
-| `createdAt` | DateTime | ISO 8601 |
-| `maxDepth` | int? | Scan depth limit; omitted if unlimited |
-| `expandAllFolders` | bool | Default `false`; initial UI expansion |
-| `scanSourceType` | enum | `local` (default), `smb`, or `sftp` |
-| `isFavorite` | bool | Default `false`; hearted in library → **Favorites** section |
+| Field | Notes |
+|-------|--------|
+| `id` | UUID v4 |
+| `rootPath` | Local path, Android `content://`, or `smb://` / `sftp://` display URI |
+| `rootName` | Display name |
+| `root` | Full tree (always complete) |
+| `treeText` | Full ASCII at scan (`renderFull`) |
+| `createdAt` | ISO 8601 |
+| `maxDepth` | Omitted in JSON if unlimited |
+| `expandAllFolders` | Default `false`; JSON only if true |
+| `scanSourceType` | `local` (default), `smb`, `sftp`; JSON only if non-local |
+| `isFavorite` | Default `false`; JSON only if true |
 
-### `ScanProgress` — `lib/models/scan_progress.dart`
+### Other models
 
-`folders`, `files`, `currentName`, `phase` (`scanning` | `building` | `saving`).
+| Type | File | Role |
+|------|------|------|
+| `ScanSourceType` | `scan_source_type.dart` | Local / SMB / SFTP |
+| `ScanProgress` | `scan_progress.dart` | Counts + phase |
+| `LibrarySortOption` | `library_sort_option.dart` | Library sort + `sortTreeBuilds` |
+| `RemoteSettings` / SMB / SFTP | `remote_settings.dart` | Credentials + `RemotePath` helpers |
 
 ---
 
-## Storage
+## Platform configuration
 
-**File:** `lib/services/tree_storage_service.dart` — `{appDocuments}/tree_library.json`
-
----
-
-## Android configuration
+### Android
 
 | Item | Location |
 |------|----------|
-| Application ID | `com.funnybearapps.directorytreebuilder` |
-| NDK | `27.0.12077973` in `android/app/build.gradle.kts` |
-| INTERNET permission | `android/app/src/main/AndroidManifest.xml` (SMB/SFTP) |
+| Application ID / namespace | `com.funnybearapps.directorytreebuilder` |
+| Label | Directory Tree Builder |
+| INTERNET | `AndroidManifest.xml` (SMB/SFTP) |
+| NDK | `27.0.12077973` in `app/build.gradle.kts` |
 | DocumentFile | `androidx.documentfile:documentfile:1.1.0` |
+| Native scan | `MainActivity.kt` under `com/funnybearapps/directorytreebuilder/` |
 
-## iOS configuration
+### iOS
 
 | Item | Location |
 |------|----------|
 | Bundle ID | `com.funnybearapps.directorytreebuilder` |
-| Minimum iOS | 13.0 (`ios/Podfile`, `IPHONEOS_DEPLOYMENT_TARGET`) |
-| CocoaPods | `ios/Podfile`; run `pod install` after `flutter pub get` |
-| Swift Package Manager | Disabled in `pubspec.yaml` (`enable-swift-package-manager: false`) |
-| Local network | `NSLocalNetworkUsageDescription` in `ios/Runner/Info.plist` (SMB/SFTP to LAN) |
-| Photo library | `NSPhotoLibraryUsageDescription` in `ios/Runner/Info.plist` (required by `file_picker` / DKImagePickerController) |
-| Directory pick | `file_picker` + `dart:io` scan (no SAF; Android-only SAF path) |
+| Display name | `CFBundleDisplayName` in `Info.plist` |
+| Minimum iOS | 13.0 (`Podfile`) |
+| Local network | `NSLocalNetworkUsageDescription` |
+| Photo library | `NSPhotoLibraryUsageDescription` (required by `file_picker` / DKImagePickerController) |
+| SPM | Disabled (`pubspec.yaml` → `enable-swift-package-manager: false`) |
+| UIScene | Disabled for this project — classic `AppDelegate` (BJ-009 blank screen on iOS 26 devices) |
+| Pod sync | `./scripts/sync_pods.sh` |
 
-## macOS configuration
+### macOS
 
 | Item | Location |
 |------|----------|
-| Entitlements | `files.user-selected.read-write`, `network.client` |
+| Bundle ID | `com.funnybearapps.directorytreebuilder` |
+| PRODUCT_NAME | `DirectoryTreeBuilder` (`Configs/AppInfo.xcconfig`) |
+| Display name | `CFBundleDisplayName` |
+| Entitlements | user-selected files R/W; `network.client` (Debug also network.server + JIT) |
 
 ---
 
@@ -278,32 +325,41 @@ Shared progress helper: `lib/services/scan_counters.dart`.
 | Area | Files |
 |------|-------|
 | Entry | `lib/main.dart` |
-| Screens | `lib/screens/home_screen.dart`, `library_screen.dart`, `tree_view_screen.dart`, `settings_screen.dart`, `remote_directory_picker_screen.dart` |
-| Scan | `directory_scanner.dart`, `android_tree_scanner.dart`, `smb_directory_scanner.dart`, `sftp_directory_scanner.dart`, `smb_remote_browser.dart`, `sftp_remote_browser.dart`, `remote_settings_service.dart`, `scan_counters.dart`, `MainActivity.kt` |
-| Storage / export | `tree_storage_service.dart`, `tree_export_service.dart` |
-| Tree UI | `lib/widgets/collapsible_tree_view.dart`, `tree_text_view.dart`, `scan_loading_overlay.dart` |
-| Utils | `lib/utils/tree_renderer.dart`, `map_cast.dart` |
+| Screens | `home_screen.dart`, `library_screen.dart`, `settings_screen.dart`, `tree_view_screen.dart`, `remote_directory_picker_screen.dart` |
+| Scan | `directory_scanner.dart`, `android_tree_scanner.dart`, `ios_tree_scanner.dart`, `smb_directory_scanner.dart`, `sftp_directory_scanner.dart`, `smb_remote_browser.dart`, `sftp_remote_browser.dart`, `scan_counters.dart`, `MainActivity.kt`, `AppDelegate.swift` |
+| Storage / export | `tree_storage_service.dart`, `tree_export_service.dart`, `remote_settings_service.dart` |
+| Tree UI | `collapsible_tree_view.dart`, `tree_text_view.dart`, `scan_loading_overlay.dart` |
+| Utils | `tree_renderer.dart`, `map_cast.dart` |
 | Models | `tree_node.dart`, `tree_build.dart`, `scan_progress.dart`, `scan_source_type.dart`, `remote_settings.dart`, `library_sort_option.dart` |
 | Tests | `directory_scanner_test.dart`, `map_cast_test.dart`, `tree_renderer_test.dart`, `library_sort_test.dart`, `widget_test.dart` |
+| Scripts | `scripts/sync_pods.sh` |
 
 ---
 
-## Known constraints / pitfalls
+## Known pitfalls
 
-- **Android `rootPath`** — `content://` URI only; not for `dart:io`.
-- **Remote credentials** — stored in app settings file locally; not included in tree library JSON exports.
-- **SMB path** — must include share as first path segment (e.g. `/videos/games`).
-- **Platform channel maps** — use `deepCastMap` before `fromJson`.
-- **Mobile export** — `bytes` required on `saveFile` (BJ-007).
-- **Depth limit** — leaf folders hide nested files (BJ-006).
-- **`treeText` in library** — always full tree at scan; export/copy use visible state at export time.
-- **Expansion toggles** — not auto-saved to library after manual collapse/expand.
-- **Large trees** — 800+ files work; scroll may lag when fully expanded.
-- **Hot reload** — insufficient after Kotlin changes; full restart required.
+- **Android `rootPath`** is `content://` only — do not open with `dart:io`.
+- **Platform channel maps** — use `deepCastMap` / isolate parse before `fromJson` (see bug journal).
+- **Mobile export** — `bytes` required on `saveFile`.
+- **Depth limit** — leaf folders hide nested files when at max depth.
+- **`treeText` in library** — full tree at scan; copy/export may be collapsed view.
+- **Expansion toggles** — not auto-saved after manual collapse/expand.
+- **Library sort** — not persisted across app launches.
+- **Remote credentials** — plaintext in `remote_settings.json`; not in library JSON.
+- **SMB** — must enter a share before selecting a folder; admin `$` shares filtered.
+- **Symlinks** — local IO scan uses `followLinks: false`.
+- **Channel / Kotlin changes** — need full app restart, not hot reload.
+- **Large trees** — fully expanded UI may scroll slowly.
+- **Release signing** — Android release still uses debug signing until a real config is added.
+- **iOS pods after `flutter clean`** — run `./scripts/sync_pods.sh` or Xcode reports Podfile.lock sandbox mismatch.
+- **Physical iOS blank white screen (iOS 26)** — UIScene / implicit engine migration can leave a white storyboard with no Flutter pixels on device while simulator works (BJ-009). Keep classic AppDelegate; do not re-add `UIApplicationSceneManifest` until Flutter fixes the device path.
+- **Launch flash** — iOS `LaunchScreen.storyboard` + `Main.storyboard` and Android `launch_background` use dark `#121412` with centered app icon (`SplashIcon` / `splash_icon`) so the pre-Flutter frame matches dark theme.
+- **iOS iCloud / Files folders** — must use security-scoped picker URL (BJ-010); plain `dart:io` on `file_picker` paths fails with “Directory does not exist”.
 
 ---
 
 ## Cross-reference
 
-- **What changed lately:** `docs/source control log.md`
-- **Bugs and fixes:** `docs/bug journal.md`
+- **What changed lately:** [`docs/source control log.md`](source%20control%20log.md)
+- **Bugs and fixes:** [`docs/bug journal.md`](bug%20journal.md)
+- **Agent rule:** `.cursor/rules/docs-sync.mdc` — update this handbook when behavior or architecture changes

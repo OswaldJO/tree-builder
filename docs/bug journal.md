@@ -1,8 +1,8 @@
 # Bug journal
 
-Chronicle of bugs encountered in **Tree Builder** and how they were fixed.
+Chronicle of bugs encountered in **Directory Tree Builder** and how they were fixed.
 For release notes style summaries, see `source control log.md`.
-For architecture context, see `Features and Inner Workings.md`.
+For architecture context (current behavior + code map), see `Features and Inner Workings.md`.
 
 ---
 
@@ -96,6 +96,15 @@ For architecture context, see `Features and Inner Workings.md`.
 | **Fix** | None planned — use **Expand all folders** at scan time or re-toggle manually. Future: persist expansion paths. |
 | **Commit** | N/A (by design) |
 
+### BJ-010 — iOS iCloud folder scan: “Directory does not exist”
+| | |
+|---|---|
+| **When** | 2026-07-22 |
+| **Symptom** | Choosing an iCloud Drive folder (e.g. `…/Mobile Documents/com~apple~CloudDocs/…`) fails with `Directory does not exist`. |
+| **Cause** | `file_picker` returns a path string without keeping the security-scoped URL. iOS sandbox cannot list iCloud paths via `dart:io` without `startAccessingSecurityScopedResource` on the picker URL. |
+| **Fix** | Native iOS `UIDocumentPicker` + scoped access + FileManager scan (`AppDelegate` / `IosTreeScanner`), same channel pattern as Android SAF. |
+| **Commit** | *Not committed yet* |
+
 ---
 
 ## Open / known issues
@@ -105,13 +114,12 @@ For architecture context, see `Features and Inner Workings.md`.
 | BJ-007 | Export on Android | Fix shipped; **pending device re-test**. |
 | — | Import JSON on Android | `withData: true`; not device-verified. |
 | — | Collapsible tree on 800+ files | Works; full expand may be slow to scroll. |
-| — | iOS directory scan | `dart:io` only; no SAF parity. |
 
 ---
 
 ## How to add entries
 
-1. Assign the next **BJ-###** id (**BJ-009** next).
+1. Assign the next **BJ-###** id (**BJ-011** next).
 2. Include **symptom**, **cause**, **fix**, and **commit** (or *in progress* / *Not committed yet*).
 3. Add a line to `source control log.md` **Updates** when the fix ships.
 4. Update `Features and Inner Workings.md` if behavior or architecture changed.

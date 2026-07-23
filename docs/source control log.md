@@ -52,6 +52,14 @@ current release: 1
 
 - **Rename — Directory Tree Builder (Jul 15 2026):** Display name → **Directory Tree Builder**; bundle/app ID → `com.funnybearapps.directorytreebuilder` (iOS, Android, macOS, Linux). **Action:** Uninstall old app; full rebuild; App Store Connect may need the new bundle ID if creating a new app listing.
 
+- **Features handbook rewrite (Jul 15 2026):** Rebuilt `docs/Features and Inner Workings.md` as the living product + architecture map (screens, scan paths, models, pitfalls). **Action:** Open `docs/Features and Inner Workings.md`.
+
+- **iOS physical device blank screen (Jul 22 2026):** White screen on real iPad (iOS 26) while simulator worked. Caused by Flutter UIScene / `FlutterImplicitEngineDelegate` migration. Reverted to classic `AppDelegate` + removed `UIApplicationSceneManifest`. **Action:** Delete app from iPad, full rebuild: `flutter clean && ./scripts/sync_pods.sh && flutter run -d <ipad>`.
+
+- **Dark splash / launch screen (Jul 22 2026):** Default white `LaunchScreen` + `Main.storyboard` (and Android launch drawable) looked like a blank white pause before first Flutter frame / permission prompts. Set dark green `#121412` backgrounds with centered app icon. **Action:** Full rebuild on device.
+
+- **iOS iCloud folder scan (Jul 22 2026):** Fixed BJ-010 — Local pick on iOS uses security-scoped `UIDocumentPicker` + native FileManager scan (`IosTreeScanner`) so iCloud Drive folders work. **Action:** Full restart on device; pick folder again.
+
 ## Focus for next release
 
 - Confirm export/import round-trip on Android after BJ-007 fix.

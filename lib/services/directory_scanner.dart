@@ -8,6 +8,7 @@ import '../models/tree_node.dart';
 import '../utils/map_cast.dart';
 import '../utils/tree_renderer.dart';
 import 'android_tree_scanner.dart';
+import 'ios_tree_scanner.dart';
 import 'scan_counters.dart';
 
 class DirectoryScanner {
@@ -29,6 +30,17 @@ class DirectoryScanner {
 
       return AndroidTreeScanner.scanDirectory(
         uri,
+        maxDepth: maxDepth,
+        onProgress: onProgress,
+      );
+    }
+
+    if (Platform.isIOS) {
+      final picked = await IosTreeScanner.pickDirectory();
+      if (picked == null) return null;
+
+      return IosTreeScanner.scanDirectory(
+        picked,
         maxDepth: maxDepth,
         onProgress: onProgress,
       );
