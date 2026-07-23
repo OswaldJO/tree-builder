@@ -8,7 +8,13 @@ import '../services/tree_storage_service.dart';
 import 'tree_view_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({super.key});
+  const LibraryScreen({
+    super.key,
+    this.initialOpenTree,
+  });
+
+  /// When set (e.g. right after a scan), opens this tree as a fullscreen dialog.
+  final TreeBuild? initialOpenTree;
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
@@ -20,6 +26,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   List<TreeBuild> _builds = [];
   bool _loading = true;
   LibrarySortOption _sortOption = LibrarySortOption.newest;
+  bool _openedInitialTree = false;
 
   @override
   void initState() {
@@ -35,7 +42,35 @@ class _LibraryScreenState extends State<LibraryScreen> {
         _builds = builds;
         _loading = false;
       });
+      _maybeOpenInitialTree();
     }
+  }
+
+  void _maybeOpenInitialTree() {
+    final tree = widget.initialOpenTree;
+    if (_openedInitialTree || tree == null || _loading) return;
+    _openedInitialTree = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _openTree(tree, fullscreenDialog: true);
+    });
+  }
+
+  Future<void> _openTree(
+    TreeBuild build, {
+    bool fullscreenDialog = false,
+  }) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: fullscreenDialog,
+        builder: (context) => TreeViewScreen(
+          treeBuild: build,
+          onDelete: () => _delete(build),
+        ),
+      ),
+    );
+    await _load();
   }
 
   Future<void> _import() async {
@@ -241,18 +276,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               const Icon(Icons.chevron_right),
                             ],
                           ),
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => TreeViewScreen(
-                                  treeBuild: build,
-                                  onDelete: () => _delete(build),
-                                ),
-                              ),
-                            );
-                            await _load();
-                          },
+                          onTap: () => _openTree(build),
                         ),
                       );
                     },

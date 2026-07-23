@@ -12,12 +12,10 @@ import '../services/remote_settings_service.dart';
 import '../services/sftp_directory_scanner.dart';
 import '../services/smb_directory_scanner.dart';
 import '../services/tree_storage_service.dart';
-import '../widgets/collapsible_tree_view.dart';
 import '../widgets/scan_loading_overlay.dart';
 import 'library_screen.dart';
 import 'remote_directory_picker_screen.dart';
 import 'settings_screen.dart';
-import 'tree_view_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,7 +33,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _expandAllFolders = false;
   bool _limitDepth = false;
   ScanSourceType _scanSource = ScanSourceType.local;
-  TreeBuild? _currentBuild;
   ScanProgress _scanProgress = const ScanProgress(folders: 0, files: 0);
 
   @override
@@ -98,12 +95,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final saved = build.copyWith(expandAllFolders: _expandAllFolders);
       await _storage.save(saved);
-      if (mounted) {
-        setState(() {
-          _currentBuild = saved;
-          _scanning = false;
-        });
-      }
+      if (!mounted) return;
+
+      setState(() => _scanning = false);
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LibraryScreen(initialOpenTree: saved),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _scanning = false);
@@ -150,7 +150,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _scanning = true;
-      _currentBuild = null;
       _scanProgress = const ScanProgress(folders: 0, files: 0);
     });
 
@@ -181,7 +180,6 @@ class _HomeScreenState extends State<HomeScreen> {
           if (!_scanning && mounted) {
             setState(() {
               _scanning = true;
-              _currentBuild = null;
               _scanProgress = progress;
             });
           } else {
@@ -198,7 +196,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _scanning = true;
-      _currentBuild = null;
       _scanProgress = const ScanProgress(folders: 0, files: 0);
     });
 
@@ -234,18 +231,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openFullView() {
-    final build = _currentBuild;
-    if (build == null) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => TreeViewScreen(treeBuild: build),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -273,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Flexible(
+                Expanded(
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -407,29 +392,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
-                        if (_currentBuild != null) ...[
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _currentBuild!.rootName,
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: _openFullView,
-                                icon: const Icon(Icons.open_in_full, size: 18),
-                                label: const Text('Open'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                        ] else if (!_scanning) ...[
+                        if (!_scanning) ...[
                           const SizedBox(height: 24),
                           OutlinedButton.icon(
                             onPressed: _openLibrary,
-                            icon: const Icon(Icons.collections_bookmark_outlined),
+                            icon: const Icon(
+                              Icons.collections_bookmark_outlined,
+                            ),
                             label: const Text('Browse Library'),
                           ),
                         ],
@@ -437,17 +406,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                if (_currentBuild != null) ...[
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: CollapsibleTreeView(
-                      key: ValueKey(_currentBuild!.id),
-                      rootName: _currentBuild!.rootName,
-                      root: _currentBuild!.root,
-                      initialExpandAll: _currentBuild!.expandAllFolders,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

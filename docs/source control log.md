@@ -60,6 +60,8 @@ current release: 1
 
 - **iOS iCloud folder scan (Jul 22 2026):** Fixed BJ-010 — Local pick on iOS uses security-scoped `UIDocumentPicker` + native FileManager scan (`IosTreeScanner`) so iCloud Drive folders work. **Action:** Full restart on device; pick folder again.
 
+- **Post-scan → library fullscreen (Jul 22 2026):** Removed home-screen tree preview. After generate, navigates to Library and opens the new tree as a fullscreen dialog; close returns to the library list. **Action:** Hot restart.
+
 ## Focus for next release
 
 - Confirm export/import round-trip on Android after BJ-007 fix.

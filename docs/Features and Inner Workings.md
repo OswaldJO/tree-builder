@@ -57,7 +57,7 @@ Segmented control: **Local** | **SMB** | **SFTP**. One primary button: **Choose 
 
 If SMB/SFTP is selected without host+username configured → snackbar with **Settings** action; scan does not start.
 
-After a successful scan: auto-save to library → show preview (`CollapsibleTreeView`) → **Open** opens tree detail.
+After a successful scan: auto-save → navigate to **Library** → open the new tree as a **fullscreen dialog**. Closing the dialog shows the library list. Home has **no** tree preview.
 
 ### Scan options
 
@@ -85,6 +85,7 @@ After a successful scan: auto-save to library → show preview (`CollapsibleTree
 - **Favorites:** heart on each row; favorited trees under **Favorites** at top, then **All trees**. Sort applies within each section.
 - **Import** / **Export all** (JSON library file).
 - Tap → tree detail (with delete). Pull-to-refresh.
+- Optional `initialOpenTree`: after a scan from Home, library opens and immediately presents that tree via `fullscreenDialog: true` (close returns to the list).
 - `scanSourceType` is stored on builds but **not** shown as a badge in the list UI.
 
 **Key types:** `LibrarySortOption`, `sortTreeBuilds()`, `TreeExportService`, `TreeStorageService`
